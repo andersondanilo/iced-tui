@@ -1,5 +1,5 @@
 use core::marker::PhantomData;
-use crossterm::{cursor, queue, terminal};
+use crossterm::{cursor, execute, queue, terminal};
 use iced_native::layout::Node;
 use iced_native::Element;
 use iced_native::Layout;
@@ -33,6 +33,7 @@ impl Default for TuiRenderer {
     }
 }
 
+#[derive(Debug)]
 pub struct Cell {
     content: Option<char>,
     style: Style,
@@ -47,6 +48,7 @@ impl Default for Cell {
     }
 }
 
+#[derive(Debug)]
 pub struct Style {
     fg_color: Option<iced_native::Color>,
     bg_color: Option<iced_native::Color>,
@@ -61,6 +63,7 @@ impl Default for Style {
     }
 }
 
+#[derive(Debug)]
 struct VirtualBuffer {
     width: u16,
     height: u16,
@@ -93,8 +96,8 @@ impl VirtualBuffer {
                 }
             }
             Primitive::Cell(x, y, cell) => {
-                if x < self.width && y < self.width {
-                    self.rows[x as usize][y as usize] = cell;
+                if x < self.width && y < self.height {
+                    self.rows[y as usize][x as usize] = cell;
                 }
             }
         };
@@ -102,37 +105,55 @@ impl VirtualBuffer {
 }
 
 impl TuiRenderer {
-    pub fn render(&mut self, primitive: Primitive) {
-        let mut stdout = std::io::stdout();
+    pub fn begin_screen(&mut self, stdout: &mut std::io::Stdout) {
+        terminal::enable_raw_mode().unwrap();
+        execute!(stdout, terminal::EnterAlternateScreen).unwrap();
+    }
 
+    pub fn end_screen(&mut self, stdout: &mut std::io::Stdout) {
+        execute!(stdout, terminal::LeaveAlternateScreen).unwrap();
+        terminal::disable_raw_mode().unwrap();
+        execute!(stdout, crossterm::style::ResetColor, cursor::Show);
+    }
+
+    pub fn render(&mut self, stdout: &mut std::io::Stdout, primitive: Primitive) {
         let (width, height) = terminal::size().unwrap();
+
+        eprintln!("rendering terminal height = {}", height);
+
         let mut vbuffer = VirtualBuffer::from_size(width, height);
         vbuffer.merge_primitive(primitive);
 
-        terminal::enable_raw_mode().unwrap();
         queue!(
             stdout,
             crossterm::style::ResetColor,
-            terminal::Clear(terminal::ClearType::All),
-            cursor::MoveTo(0, 0),
+            cursor::Hide,
+            //terminal::Clear(terminal::ClearType::All),
+            // cursor::MoveTo(0, 0),
         )
         .unwrap();
 
         let height_usize = vbuffer.height as usize;
 
         for (i, row) in vbuffer.rows.iter().enumerate() {
-            for cell in row {
-                let content: u8 = match cell.content {
-                    Some(c) => c as u8,
-                    None => ' ' as u8,
-                };
-                stdout.write(&[content]).unwrap();
-            }
+            let mut row_content = row
+                .iter()
+                .map(|cell| match cell.content {
+                    Some(c) => c,
+                    None => ' ',
+                })
+                .collect::<String>();
+            // eprintln!("rendering row {}: {}", i, row_content);
 
-            if i < height_usize {
-                stdout.write(&['\n' as u8]).unwrap();
-            }
+            queue!(
+                stdout,
+                cursor::MoveTo(0, i as u16),
+                terminal::Clear(terminal::ClearType::CurrentLine),
+                crossterm::style::Print(row_content)
+            );
         }
+
+        queue!(stdout, cursor::MoveTo(0, 0));
 
         stdout.flush().unwrap();
     }
