@@ -1,16 +1,22 @@
-use iced_native::{Color, Column, Container, Element, HorizontalAlignment, Length, Text};
-use iced_tui::TuiRenderer;
-use termion::screen::AlternateScreen;
-use tui::backend::TermionBackend;
-use tui::Terminal;
+use iced_futures::executor::Tokio;
+use iced_native::{Color, Column, Command, Container, Element, HorizontalAlignment, Length, Text};
+use iced_tui::{Application, TuiRenderer};
 
-pub struct MyState;
+pub struct MyApp {
+    username: String,
+}
 
-impl Sandbox for MyState {
+impl Application for MyApp {
     type Message = ();
+    type Executor = Tokio;
 
-    fn new() -> Self {
-        MyState
+    fn new() -> (MyApp, Command<Self::Message>) {
+        (
+            MyApp {
+                username: "Test1".to_string(),
+            },
+            Command::none(),
+        )
     }
 
     fn view(&mut self) -> Element<'_, Self::Message, TuiRenderer> {
@@ -38,14 +44,11 @@ impl Sandbox for MyState {
         .into()
     }
 
-    fn update(&mut self, _messages: Vec<Self::Message>) {}
+    fn update(&mut self, message: Self::Message) -> Command<Self::Message> {
+        Command::none()
+    }
 }
 
 fn main() {
-    let stdout = std::io::stdout().into_raw_mode().unwrap();
-    let stdout = AlternateScreen::from(stdout);
-    let backend = TermionBackend::new(stdout);
-    let terminal = Terminal::new(backend).unwrap();
-
-    MyState::run(&mut terminal)
+    MyApp::run()
 }
