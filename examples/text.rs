@@ -7,8 +7,7 @@ use iced_native::{
 use iced_tui::{Application, TuiRenderer};
 
 pub struct MyApp {
-    username: String,
-    should_exit: bool,
+    should_exit: Option<u8>,
 }
 
 #[derive(Clone, Debug)]
@@ -21,16 +20,10 @@ impl Application for MyApp {
     type Executor = Tokio;
 
     fn new() -> (MyApp, Command<Self::Message>) {
-        (
-            MyApp {
-                username: "Test1".to_string(),
-                should_exit: false,
-            },
-            Command::none(),
-        )
+        (MyApp { should_exit: None }, Command::none())
     }
 
-    fn should_exit(&self) -> bool {
+    fn should_exit(&self) -> Option<u8> {
         return self.should_exit;
     }
 
@@ -43,7 +36,7 @@ impl Application for MyApp {
             Column::new()
                 .spacing(1)
                 .push(
-                    Text::new("Hello pancurses!\nThis is a toy renderer")
+                    Text::new("Hello test iced-tui!\nThis is a toy renderer")
                         .color(Color {
                             r: 0.,
                             g: 0.,
@@ -54,7 +47,7 @@ impl Application for MyApp {
                         .horizontal_alignment(HorizontalAlignment::Center),
                 )
                 .push(Text::new("Other text").width(Length::Shrink))
-                .width(Length::Shrink),
+                .width(Length::Fill),
         )
         .width(Length::Fill)
         .height(Length::Fill)
@@ -64,25 +57,19 @@ impl Application for MyApp {
     }
 
     fn update(&mut self, message: Self::Message) -> Command<Self::Message> {
-        eprintln!(
-            "{:?} - APP - update called for message: {:?}",
-            std::thread::current().id(),
-            message
-        );
-
         match message {
-            AppMessage::EventOccurred(Event::Keyboard(keyboard::Event::KeyPressed {
+            AppMessage::EventOccurred(Event::Keyboard(keyboard::Event::KeyReleased {
                 key_code,
                 modifiers,
             })) => {
-                eprintln!(
-                    "{:?} - APP - message matched: {:?}",
-                    std::thread::current().id(),
-                    message
-                );
+                if key_code == keyboard::KeyCode::Q {
+                    // exit on press q (status 0 = success)
+                    self.should_exit = Some(0);
+                }
 
                 if key_code == keyboard::KeyCode::C && modifiers.control {
-                    self.should_exit = true;
+                    // exit on ctrl+c (status 1 = error)
+                    self.should_exit = Some(1);
                 }
 
                 Command::none()

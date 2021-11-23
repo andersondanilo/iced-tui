@@ -62,8 +62,8 @@ pub trait Application {
     /// Returns whether the [`Application`] should be terminated.
     ///
     /// By default, it returns `false`.
-    fn should_exit(&self) -> bool {
-        false
+    fn should_exit(&self) -> Option<u8> {
+        None
     }
 
     /// Launches the sandbox and takes ownership of the current thread.
@@ -132,10 +132,13 @@ pub trait Application {
         let mut stdout = std::io::stdout();
         renderer.begin_screen(&mut stdout);
 
+        let mut exit_status_code: u8 = 0;
+
         // event loop on main thread
         loop {
             // eprintln!("{:?} - Waiting next message", std::thread::current().id());
-            if application.borrow().should_exit() {
+            if let Some(status_code) = application.borrow().should_exit() {
+                exit_status_code = status_code;
                 eprintln!("Exiting app");
                 break;
             }
@@ -247,7 +250,8 @@ pub trait Application {
         }
 
         renderer.end_screen(&mut stdout);
-        std::process::exit(0);
+
+        std::process::exit(exit_status_code.into());
     }
 }
 
