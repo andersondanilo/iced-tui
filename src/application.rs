@@ -1,5 +1,8 @@
+use crate::constants::LOG_TARGET;
+use crate::renderer::VirtualBuffer;
 use crate::TuiRenderer;
 use core::cell::RefCell;
+use core::fmt::Debug;
 pub use crossterm::{
     cursor,
     event::{self, KeyCode, KeyEvent},
@@ -15,16 +18,15 @@ use iced_native::keyboard;
 use iced_native::Command;
 use iced_native::Event;
 use iced_native::Executor;
-use iced_native::Hasher;
 use iced_native::Subscription;
 use iced_native::UserInterface;
-use iced_native::{Cache, Container, Element, Length};
+use iced_native::{Cache, Element};
 use std::rc::Rc;
 use std::time::Duration;
 
 pub trait Application {
     type Executor: Executor;
-    type Message: std::fmt::Debug + Send + Clone;
+    type Message: Send + Clone + Debug;
 
     /// Initializes the Sanbox
     ///
@@ -101,24 +103,20 @@ pub trait Application {
                     _ => vec![],
                 };
 
-                eprintln!("trying to send key event");
-
                 if let Err(err) = ui_iced_event_sender.unbounded_send(UiMessage::from_events(
                     term_events
                         .into_iter()
                         .map(|k| Event::Keyboard(k))
                         .collect(),
                 )) {
-                    eprintln!("{}", err);
+                    log::error!(target: LOG_TARGET, "{}", err);
                     return;
                 }
             }
         });
 
-        let mut runtime = iced_futures::Runtime::new(
-            runtime_executor,
-            AppMessageMapperSink::from_sender(sender.clone()),
-        );
+        let mapper = AppMessageMapperSink::from_sender(sender);
+        let mut runtime = iced_futures::Runtime::new(runtime_executor, mapper);
 
         let (app, command) = runtime.enter(|| Self::new());
         let application = Rc::new(RefCell::new(app));
@@ -127,126 +125,127 @@ pub trait Application {
 
         let mut cache = Some(Cache::default());
         let mut renderer = TuiRenderer::default();
-        let mut has_first_render = false;
+        let mut last_vbuffer: Option<VirtualBuffer> = None;
 
         let mut stdout = std::io::stdout();
         renderer.begin_screen(&mut stdout);
 
         let mut exit_status_code: u8 = 0;
 
+        let mut ui_message: Option<UiMessage<Self::Message>> = None;
+
         // event loop on main thread
         loop {
-            // eprintln!("{:?} - Waiting next message", std::thread::current().id());
-            if let Some(status_code) = application.borrow().should_exit() {
-                exit_status_code = status_code;
-                eprintln!("Exiting app");
-                break;
-            }
-
-            let ui_message = match receiver.try_next() {
-                Ok(Some(m)) => m,
-                Ok(None) => {
-                    eprintln!("{:?} - Channel closed", std::thread::current().id());
-                    std::thread::sleep(poll_rate);
-                    continue;
-                }
-                Err(_) => {
-                    if has_first_render {
-                        // eprintln!("{:?} - No next message", e);
-                        std::thread::sleep(poll_rate);
-                        continue;
-                    } else {
-                        has_first_render = true;
-                        UiMessage {
-                            app_message: None,
-                            events: vec![],
-                        }
-                    }
-                }
-            };
-
-            let (commands, subscription, events) = runtime.enter(|| {
-                eprintln!(
-                    "{:?} - Received: {:?}",
-                    std::thread::current().id(),
-                    ui_message,
-                );
+            // TODO: Review logic about immeditate render when state is updated
+            let mut state_updated = false;
+            let current_ui_message = ui_message.clone();
+            let (commands, subscription, events, event_statuses) = runtime.enter(|| {
                 let (width, height) = terminal::size().unwrap();
                 let size = Size {
                     width: width as f32,
                     height: height as f32,
                 };
                 let cursor_position = Point { x: 0.0, y: 0.0 };
-                let events = ui_message.events.clone();
 
-                eprintln!("Rendering on size: {:?}", size);
+                log::debug!(target: LOG_TARGET, "received message {:?}", ui_message);
 
                 // render and return messages
-                let messages = {
-                    let mut app_bmut = application.borrow_mut();
-                    let view_result = app_bmut.view();
+                let mut app_bmut = application.borrow_mut();
+                let view_result = app_bmut.view();
 
-                    let mut ui = UserInterface::build(
-                        view_result,
-                        size,
-                        cache.take().unwrap(),
-                        &mut renderer,
-                    );
-                    let primitive = ui.draw(&mut renderer, cursor_position);
+                let mut ui =
+                    UserInterface::build(view_result, size, cache.take().unwrap(), &mut renderer);
+                let primitive = ui.draw(&mut renderer, cursor_position);
 
-                    renderer.render(&mut stdout, primitive);
+                if let Some(vbuffer) = renderer.render(&mut stdout, primitive, &last_vbuffer) {
+                    last_vbuffer = Some(vbuffer);
+                }
 
-                    let mut messages: Vec<Self::Message> = match ui_message.app_message {
-                        Some(m) => vec![m],
-                        None => vec![],
-                    };
+                let (messages, event_statuses, events) = match current_ui_message {
+                    Some(ui_message) => {
+                        let mut messages: Vec<Self::Message> = match ui_message.app_message {
+                            Some(m) => vec![m],
+                            None => vec![],
+                        };
+                        let mut event_statuses = vec![];
+                        let events = ui_message.events.clone();
 
-                    eprintln!("messages received from loop : {:?}", messages);
+                        if !ui_message.events.is_empty() {
+                            event_statuses = ui.update(
+                                &ui_message.events,
+                                cursor_position,
+                                &renderer,
+                                &mut clipboard::Null,
+                                &mut messages,
+                            );
+                        }
 
-                    if !ui_message.events.is_empty() {
-                        ui.update(
-                            &ui_message.events,
-                            cursor_position,
-                            &renderer,
-                            &mut clipboard::Null,
-                            &mut messages,
-                        );
-                        eprintln!("messages after events: {:?}", messages);
+                        (messages, event_statuses, events)
                     }
-
-                    cache = Some(ui.into_cache());
-
-                    messages
+                    None => (vec![], vec![], vec![]),
                 };
 
-                eprintln!("current messages: {:?}", messages);
+                cache = Some(ui.into_cache());
 
                 // update state
                 let mut commands: Vec<Command<Self::Message>> = vec![];
-                let mut app_bmut = application.borrow_mut();
 
                 for message in messages {
                     commands.push(app_bmut.update(message));
+                    state_updated = true;
                 }
-
-                eprintln!("current commands: {:?}", commands);
 
                 let subscription = app_bmut.subscription();
 
-                (commands, subscription, events)
+                (commands, subscription, events, event_statuses)
             });
 
             for command in commands {
                 runtime.spawn(command);
             }
 
-            for event in events {
-                eprintln!("broadcasting event: {:?}", event);
-                runtime.broadcast((event, iced_native::event::Status::Ignored));
+            for (event, event_status) in events.iter().zip(event_statuses) {
+                log::debug!(
+                    target: LOG_TARGET,
+                    "broadcasting event: {:?}, status: {:?}",
+                    event,
+                    event_status
+                );
+                runtime.broadcast((event.clone(), event_status));
             }
 
-            eprintln!("tracking subscription: {:?}", subscription);
             runtime.track(subscription);
+
+            if let Some(status_code) = application.borrow().should_exit() {
+                exit_status_code = status_code;
+                log::debug!(target: LOG_TARGET, "Exiting app");
+                break;
+            }
+
+            ui_message = loop {
+                match receiver.try_next() {
+                    Ok(Some(m)) => break Some(m),
+                    Ok(None) => {
+                        log::error!(
+                            target: LOG_TARGET,
+                            "{:?} - Channel closed",
+                            std::thread::current().id()
+                        );
+                        std::thread::sleep(poll_rate);
+                        continue;
+                    }
+                    Err(_) => {
+                        if !state_updated {
+                            std::thread::sleep(poll_rate);
+                        } else {
+                            break Some(UiMessage {
+                                app_message: None,
+                                events: vec![],
+                            });
+                        }
+                    }
+                }
+            };
         }
 
         renderer.end_screen(&mut stdout);
@@ -350,7 +349,7 @@ fn keycode_from_char(c: char) -> Option<keyboard::KeyCode> {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct UiMessage<M> {
     app_message: Option<M>,
     events: Vec<Event>,
@@ -390,17 +389,13 @@ impl<M> AppMessageMapperSink<M> {
     }
 }
 
-impl<M> Sink<M> for AppMessageMapperSink<M>
-where
-    M: std::fmt::Debug,
-{
+impl<M> Sink<M> for AppMessageMapperSink<M> {
     type Error = mpsc::SendError;
 
     fn poll_ready(
         self: std::pin::Pin<&mut Self>,
         ctx: &mut std::task::Context<'_>,
     ) -> std::task::Poll<std::result::Result<(), <Self as futures::Sink<M>>::Error>> {
-        eprintln!("call poll ready");
         self.sender.poll_ready(ctx)
     }
 
@@ -408,7 +403,6 @@ where
         self: std::pin::Pin<&mut Self>,
         message: M,
     ) -> std::result::Result<(), <Self as futures::Sink<M>>::Error> {
-        eprintln!("start sink send: {:?}", message);
         self.get_mut()
             .sender
             .start_send(UiMessage::from_app_message(message))
@@ -418,7 +412,6 @@ where
         self: std::pin::Pin<&mut Self>,
         ctx: &mut std::task::Context<'_>,
     ) -> std::task::Poll<std::result::Result<(), <Self as futures::Sink<M>>::Error>> {
-        eprintln!("call poll flush");
         std::pin::Pin::new(&mut self.get_mut().sender).poll_flush(ctx)
     }
 
@@ -427,7 +420,6 @@ where
         ctx: &mut std::task::Context<'_>,
     ) -> std::task::Poll<std::result::Result<(), <Self as iced_futures::futures::Sink<M>>::Error>>
     {
-        eprintln!("call poll close");
         std::pin::Pin::new(&mut self.get_mut().sender).poll_close(ctx)
     }
 }

@@ -2,9 +2,10 @@ use iced_futures::executor::Tokio;
 use iced_native::Subscription;
 use iced_native::{
     keyboard, subscription, Color, Column, Command, Container, Element, Event, HorizontalAlignment,
-    Length, Text,
+    Length, Row, Text,
 };
-use iced_tui::{Application, TuiRenderer};
+use iced_tui::{Application, Style, TuiRenderer};
+use simplelog::{Config, LevelFilter, WriteLogger};
 
 pub struct MyApp {
     should_exit: Option<u8>,
@@ -33,26 +34,54 @@ impl Application for MyApp {
 
     fn view(&mut self) -> Element<'_, Self::Message, TuiRenderer> {
         Container::new(
-            Column::new()
-                .spacing(1)
+            Row::new()
+                .spacing(4)
+                .width(Length::Shrink)
                 .push(
-                    Text::new("Hello test iced-tui!\nThis is a toy renderer")
-                        .color(Color {
-                            r: 0.,
-                            g: 0.,
-                            b: 1.,
-                            a: 1.,
-                        })
-                        .width(Length::Shrink)
-                        .horizontal_alignment(HorizontalAlignment::Center),
+                    Column::new()
+                        .spacing(4)
+                        .push(
+                            Text::new("Hello test iced-tui!\nThis is a toy renderer")
+                                .color(Color {
+                                    r: 0.,
+                                    g: 0.,
+                                    b: 1.,
+                                    a: 1.,
+                                })
+                                .width(Length::Shrink)
+                                .horizontal_alignment(HorizontalAlignment::Center),
+                        )
+                        .push(Text::new("Other text").width(Length::Shrink))
+                        .width(Length::Shrink),
                 )
-                .push(Text::new("Other text").width(Length::Shrink))
-                .width(Length::Fill),
+                .push(
+                    Column::new()
+                        .spacing(4)
+                        .push(Container::new(
+                            Text::new("Hello 2 test iced-tui!\nThis is a toy renderer")
+                                .font(Style::default().fg(Color {
+                                    r: 0.3,
+                                    g: 0.8,
+                                    b: 0.,
+                                    a: 1.,
+                                }))
+                                .width(Length::Shrink)
+                                .horizontal_alignment(HorizontalAlignment::Center),
+                        ))
+                        .push(Text::new("Other text 2").width(Length::Shrink))
+                        .width(Length::Shrink),
+                ),
         )
         .width(Length::Fill)
         .height(Length::Fill)
         .center_x()
         .center_y()
+        .style(Style::default().bg(Color {
+            r: 0.2,
+            g: 0.2,
+            b: 0.2,
+            a: 1.,
+        }))
         .into()
     }
 
@@ -80,5 +109,6 @@ impl Application for MyApp {
 }
 
 fn main() {
+    WriteLogger::init(LevelFilter::Debug, Config::default(), std::io::stderr());
     MyApp::run()
 }

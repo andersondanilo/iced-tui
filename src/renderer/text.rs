@@ -1,9 +1,9 @@
-use super::primitives::{Cell, Primitive, Style, TuiFont};
+use super::primitives::{Cell, Primitive, Style};
 use super::tui_renderer::TuiRenderer;
 use iced_native::{text, Color, HorizontalAlignment, Rectangle, Renderer, Size, VerticalAlignment};
 
 impl text::Renderer for TuiRenderer {
-    type Font = TuiFont;
+    type Font = Style;
 
     fn default_size(&self) -> u16 {
         1
@@ -16,7 +16,8 @@ impl text::Renderer for TuiRenderer {
         _font: <Self as text::Renderer>::Font,
         bounds: iced_native::Size,
     ) -> (f32, f32) {
-        let (_, width, height) = crop_text_to_bounds(content, bounds, 0, 0, true, false);
+        let (_, width, height) =
+            crop_text_to_bounds(content, bounds, 0, 0, true, false, Style::default());
         (width as f32, height as f32)
     }
 
@@ -26,11 +27,16 @@ impl text::Renderer for TuiRenderer {
         bounds: Rectangle,
         content: &str,
         _size: u16,
-        _font: <Self as text::Renderer>::Font,
-        _color: std::option::Option<Color>,
+        font: <Self as text::Renderer>::Font,
+        color: Option<Color>,
         _horizontal_alignment: HorizontalAlignment,
         _vertical_alignment: VerticalAlignment,
     ) -> <Self as Renderer>::Output {
+        let style = Style {
+            fg_color: color.or(font.fg_color),
+            ..font
+        };
+
         let (primitive_cells, _width, _height) = crop_text_to_bounds(
             content,
             bounds.size(),
@@ -38,6 +44,7 @@ impl text::Renderer for TuiRenderer {
             bounds.y as u16,
             true,
             true,
+            style,
         );
         Primitive::Group(primitive_cells)
     }
@@ -50,6 +57,7 @@ fn crop_text_to_bounds<'a>(
     start_y: u16,
     auto_wrap: bool,
     return_primitives: bool,
+    style: Style,
 ) -> (Vec<Primitive>, u16, u16) {
     let mut primitive_cells: Vec<Primitive> = Vec::with_capacity(content.len());
     let bounds_width_i = size.width as u16;
@@ -58,8 +66,6 @@ fn crop_text_to_bounds<'a>(
     let mut current_y: u16 = start_y;
     let mut filled_width: u16 = 0;
     let mut filled_height: u16 = 1;
-
-    // TODO: Handle non-printable chars and tab/space
 
     let mut row_width: u16 = 0;
 
@@ -80,6 +86,10 @@ fn crop_text_to_bounds<'a>(
             continue;
         }
 
+        if !is_printable(c) {
+            continue;
+        }
+
         // add char to current row, if inside width bounds
         if return_primitives {
             primitive_cells.push(Primitive::Cell(
@@ -87,7 +97,7 @@ fn crop_text_to_bounds<'a>(
                 current_y,
                 Cell {
                     content: Some(c),
-                    style: Style::default(),
+                    style,
                 },
             ));
         }
@@ -107,16 +117,27 @@ fn crop_text_to_bounds<'a>(
     (primitive_cells, filled_width, filled_height)
 }
 
+fn is_printable(c: char) -> bool {
+    c as u32 >= 30
+}
+
 #[cfg(test)]
 mod tests {
-    use super::super::primitives::Primitive;
+    use super::super::primitives::{Primitive, Style};
     use super::crop_text_to_bounds;
     use iced_native::Size;
 
     #[test]
     fn it_get_primitives_from_crop_text() {
-        let (primitives, width, height) =
-            crop_text_to_bounds("Hello\nPan", Size::new(50., 50.), 10, 10, false, true);
+        let (primitives, width, height) = crop_text_to_bounds(
+            "Hello\nPan",
+            Size::new(50., 50.),
+            10,
+            10,
+            false,
+            true,
+            Style::default(),
+        );
 
         assert_eq!(width, 5);
         assert_eq!(height, 2);
@@ -159,6 +180,7 @@ mod tests {
             10,
             false,
             true,
+            Style::default(),
         );
 
         assert_eq!(width, 3);
@@ -206,6 +228,7 @@ mod tests {
             10,
             false,
             true,
+            Style::default(),
         );
 
         assert_eq!(width, 5);
@@ -252,6 +275,7 @@ mod tests {
             10,
             true,
             true,
+            Style::default(),
         );
 
         assert_eq!(width, 3);
@@ -289,6 +313,99 @@ mod tests {
             assert_eq!(&primitives[i], expected_primitive);
         }
 
+        assert_eq!(primitives.len(), expected_primitives.len());
+    }
+
+    #[test]
+    fn it_ignore_non_printable() {
+        let (primitives, width, height) = crop_text_to_bounds(
+            "Hello\n\tPan\nLon\nI\ton\n",
+            Size::new(3., 10.),
+            10,
+            10,
+            true,
+            true,
+            Style::default(),
+        );
+
+        let expected_primitives = vec![
+            Primitive::from_char(10, 10, 'H'),
+            Primitive::from_char(11, 10, 'e'),
+            Primitive::from_char(12, 10, 'l'),
+            Primitive::from_char(10, 11, 'l'),
+            Primitive::from_char(11, 11, 'o'),
+            Primitive::from_char(10, 12, 'P'),
+            Primitive::from_char(11, 12, 'a'),
+            Primitive::from_char(12, 12, 'n'),
+            Primitive::from_char(10, 13, 'L'),
+            Primitive::from_char(11, 13, 'o'),
+            Primitive::from_char(12, 13, 'n'),
+            Primitive::from_char(10, 14, 'I'),
+            Primitive::from_char(11, 14, 'o'),
+            Primitive::from_char(12, 14, 'n'),
+        ];
+
+        for (i, expected_primitive) in expected_primitives.iter().enumerate() {
+            assert!(
+                primitives.len() > i,
+                "should have primitive at index {}, ({})",
+                primitives.len(),
+                match expected_primitive {
+                    Primitive::Cell(x, y, cell) => {
+                        format!("x: {}, y: {}, char: {}", x, y, cell.content.unwrap())
+                    }
+                    _ => "".to_string(),
+                }
+            );
+            assert_eq!(&primitives[i], expected_primitive);
+        }
+
+        assert_eq!(width, 3);
+        assert_eq!(height, 5);
+        assert_eq!(primitives.len(), expected_primitives.len());
+    }
+
+    #[test]
+    fn it_dont_ignore_space() {
+        let (primitives, width, height) = crop_text_to_bounds(
+            "Hello Pan",
+            Size::new(3., 10.),
+            10,
+            10,
+            true,
+            true,
+            Style::default(),
+        );
+
+        let expected_primitives = vec![
+            Primitive::from_char(10, 10, 'H'),
+            Primitive::from_char(11, 10, 'e'),
+            Primitive::from_char(12, 10, 'l'),
+            Primitive::from_char(10, 11, 'l'),
+            Primitive::from_char(11, 11, 'o'),
+            Primitive::from_char(12, 11, ' '),
+            Primitive::from_char(10, 12, 'P'),
+            Primitive::from_char(11, 12, 'a'),
+            Primitive::from_char(12, 12, 'n'),
+        ];
+
+        for (i, expected_primitive) in expected_primitives.iter().enumerate() {
+            assert!(
+                primitives.len() > i,
+                "should have primitive at index {}, ({})",
+                primitives.len(),
+                match expected_primitive {
+                    Primitive::Cell(x, y, cell) => {
+                        format!("x: {}, y: {}, char: {}", x, y, cell.content.unwrap())
+                    }
+                    _ => "".to_string(),
+                }
+            );
+            assert_eq!(&primitives[i], expected_primitive);
+        }
+
+        assert_eq!(width, 3);
+        assert_eq!(height, 3);
         assert_eq!(primitives.len(), expected_primitives.len());
     }
 }

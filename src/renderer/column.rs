@@ -1,7 +1,6 @@
-use super::primitives::Primitive;
 use super::tui_renderer::TuiRenderer;
+use super::utils::{draw_list, RoundDirection};
 use iced_native::column;
-use std::iter::zip;
 
 impl column::Renderer for TuiRenderer {
     fn draw<Message>(
@@ -12,12 +11,14 @@ impl column::Renderer for TuiRenderer {
         cursor_position: iced_native::Point,
         viewport: &iced_native::Rectangle,
     ) -> <Self as iced_native::Renderer>::Output {
-        Primitive::Group(
-            zip(layout.children(), contents)
-                .map(|(layout, content)| {
-                    content.draw(self, defaults, layout, cursor_position, viewport)
-                })
-                .collect::<Vec<Self::Output>>(),
+        draw_list(
+            self,
+            defaults,
+            contents,
+            layout,
+            cursor_position,
+            viewport,
+            RoundDirection::Vertical,
         )
     }
 }
