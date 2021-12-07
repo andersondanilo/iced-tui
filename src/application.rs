@@ -47,7 +47,7 @@ pub trait Application {
     /// Returns the widgets to display in the [`Application`].
     ///
     /// These widgets can produce __messages__ based on user interaction.
-    fn view(&mut self) -> Element<'_, Self::Message, TuiRenderer>;
+    fn view(&self) -> Element<'_, Self::Message, TuiRenderer>;
 
     /// Returns the event [`Subscription`] for the current state of the
     /// application.
