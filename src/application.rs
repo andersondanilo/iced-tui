@@ -104,10 +104,7 @@ pub trait Application {
                 };
 
                 if let Err(err) = ui_iced_event_sender.unbounded_send(UiMessage::from_events(
-                    term_events
-                        .into_iter()
-                        .map(Event::Keyboard)
-                        .collect(),
+                    term_events.into_iter().map(Event::Keyboard).collect(),
                 )) {
                     log::error!(target: LOG_TARGET, "{}", err);
                     return;

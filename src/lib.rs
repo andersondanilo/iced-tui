@@ -1,4 +1,5 @@
 #![feature(iter_zip)]
+#![feature(test)]
 mod application;
 mod constants;
 mod renderer;
