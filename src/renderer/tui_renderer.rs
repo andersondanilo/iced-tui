@@ -107,7 +107,7 @@ impl TuiRenderer {
     }
 }
 
-fn split_by_style(cells: &Vec<Cell>) -> Vec<(Style, String)> {
+fn split_by_style(cells: &[Cell]) -> Vec<(Style, String)> {
     let mut last_style = Style::default();
     let mut results = vec![];
     let mut last_string = "".to_string();

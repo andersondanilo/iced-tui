@@ -109,6 +109,6 @@ impl Application for MyApp {
 }
 
 fn main() {
-    WriteLogger::init(LevelFilter::Debug, Config::default(), std::io::stderr());
+    WriteLogger::init(LevelFilter::Debug, Config::default(), std::io::stderr()).unwrap();
     MyApp::run()
 }

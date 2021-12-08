@@ -50,7 +50,7 @@ impl text::Renderer for TuiRenderer {
     }
 }
 
-fn crop_text_to_bounds<'a>(
+fn crop_text_to_bounds(
     content: &str,
     size: Size,
     start_x: u16,
