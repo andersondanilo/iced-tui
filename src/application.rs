@@ -130,12 +130,10 @@ pub trait Application {
         let mut stdout = std::io::stdout();
         renderer.begin_screen(&mut stdout);
 
-        let mut exit_status_code: u8 = 0;
-
         let mut ui_message: Option<UiMessage<Self::Message>> = None;
 
         // event loop on main thread
-        loop {
+        let exit_status_code: u8 = loop {
             // TODO: Review logic about immeditate render when state is updated
             let mut state_updated = false;
             let current_ui_message = ui_message.clone();
@@ -217,9 +215,8 @@ pub trait Application {
             runtime.track(subscription);
 
             if let Some(status_code) = application.borrow().should_exit() {
-                exit_status_code = status_code;
                 log::debug!(target: LOG_TARGET, "Exiting app");
-                break;
+                break status_code;
             }
 
             ui_message = loop {
@@ -246,7 +243,7 @@ pub trait Application {
                     }
                 }
             };
-        }
+        };
 
         renderer.end_screen(&mut stdout);
 
@@ -302,7 +299,21 @@ fn term_keycode_to_iced(term_keycode: event::KeyCode) -> Option<keyboard::KeyCod
         event::KeyCode::BackTab => Some(keyboard::KeyCode::Tab),
         event::KeyCode::Delete => Some(keyboard::KeyCode::Delete),
         event::KeyCode::Insert => Some(keyboard::KeyCode::Insert),
-        event::KeyCode::F(u8) => None, // TODO: Map F* keys
+        event::KeyCode::F(number) => match number {
+            1 => Some(keyboard::KeyCode::F1),
+            2 => Some(keyboard::KeyCode::F2),
+            3 => Some(keyboard::KeyCode::F3),
+            4 => Some(keyboard::KeyCode::F4),
+            5 => Some(keyboard::KeyCode::F5),
+            6 => Some(keyboard::KeyCode::F6),
+            7 => Some(keyboard::KeyCode::F7),
+            8 => Some(keyboard::KeyCode::F8),
+            9 => Some(keyboard::KeyCode::F9),
+            10 => Some(keyboard::KeyCode::F10),
+            11 => Some(keyboard::KeyCode::F11),
+            12 => Some(keyboard::KeyCode::F12),
+            _ => None,
+        }, // TODO: Map F* keys
         event::KeyCode::Char(c) => keycode_from_char(c),
         event::KeyCode::Null => None,
         event::KeyCode::Esc => Some(keyboard::KeyCode::Escape),
@@ -366,13 +377,6 @@ impl<M> UiMessage<M> {
     fn from_app_message(app_message: M) -> Self {
         UiMessage {
             app_message: Some(app_message),
-            events: vec![],
-        }
-    }
-
-    fn tick() -> Self {
-        UiMessage {
-            app_message: None,
             events: vec![],
         }
     }

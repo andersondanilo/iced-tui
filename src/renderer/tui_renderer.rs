@@ -14,7 +14,7 @@ impl TuiRenderer {
     pub fn end_screen(&mut self, stdout: &mut std::io::Stdout) {
         execute!(stdout, terminal::LeaveAlternateScreen).unwrap();
         terminal::disable_raw_mode().unwrap();
-        execute!(stdout, crossterm::style::ResetColor, cursor::Show);
+        execute!(stdout, crossterm::style::ResetColor, cursor::Show).unwrap();
     }
 
     fn make_vbuffer(&self, primitive: Primitive) -> VirtualBuffer {
@@ -48,7 +48,8 @@ impl TuiRenderer {
                 stdout,
                 cursor::MoveTo(0, i as u16),
                 //terminal::Clear(terminal::ClearType::CurrentLine),
-            );
+            )
+            .unwrap();
 
             for (style, content) in results_by_style {
                 let mut fg_changed = false;
@@ -59,7 +60,8 @@ impl TuiRenderer {
                     queue!(
                         stdout,
                         crossterm::style::SetForegroundColor(to_term_color(fg_color))
-                    );
+                    )
+                    .unwrap();
                     fg_changed = true;
                 }
 
@@ -67,7 +69,8 @@ impl TuiRenderer {
                     queue!(
                         stdout,
                         crossterm::style::SetBackgroundColor(to_term_color(bg_color))
-                    );
+                    )
+                    .unwrap();
                     bg_changed = true;
                 }
 
@@ -75,26 +78,28 @@ impl TuiRenderer {
                     queue!(
                         stdout,
                         crossterm::style::SetAttribute(crossterm::style::Attribute::Bold)
-                    );
+                    )
+                    .unwrap();
                     attribute_changed = true;
                 }
 
-                queue!(stdout, crossterm::style::Print(content));
+                queue!(stdout, crossterm::style::Print(content)).unwrap();
 
                 if fg_changed || bg_changed {
-                    queue!(stdout, crossterm::style::ResetColor);
+                    queue!(stdout, crossterm::style::ResetColor).unwrap();
                 }
 
                 if attribute_changed {
                     queue!(
                         stdout,
                         crossterm::style::SetAttribute(crossterm::style::Attribute::Reset),
-                    );
+                    )
+                    .unwrap();
                 }
             }
         }
 
-        queue!(stdout, cursor::MoveTo(0, 0));
+        queue!(stdout, cursor::MoveTo(0, 0)).unwrap();
 
         stdout.flush().unwrap();
 
