@@ -25,7 +25,7 @@ impl Application for MyApp {
     }
 
     fn should_exit(&self) -> Option<u8> {
-        return self.should_exit;
+        self.should_exit
     }
 
     fn subscription(&self) -> Subscription<Self::Message> {
