@@ -113,21 +113,18 @@ fn split_by_style(cells: &Vec<Cell>) -> Vec<(Style, String)> {
     let mut last_string = "".to_string();
 
     for cell in cells {
-        if last_string.len() > 0 && last_style != cell.style {
+        if !last_string.is_empty() && last_style != cell.style {
             results.push((last_style, last_string));
 
             last_string = "".to_string()
         }
 
-        last_string.push(match cell.content {
-            Some(c) => c,
-            None => ' ',
-        });
+        last_string.push(cell.content.unwrap_or(' '));
 
         last_style = cell.style
     }
 
-    if last_string.len() > 0 {
+    if !last_string.is_empty() {
         results.push((last_style, last_string));
     }
 
@@ -156,7 +153,7 @@ impl Renderer for TuiRenderer {
         _overlay: <Self as iced_native::Renderer>::Output,
         _overlay_bounds: iced_native::Rectangle,
     ) -> <Self as iced_native::Renderer>::Output {
-        return base;
+        base
     }
 }
 

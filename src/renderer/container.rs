@@ -44,7 +44,7 @@ impl container::Renderer for TuiRenderer {
             container_bounds.width.round() as u16,
             container_bounds.height.round() as u16,
             Cell {
-                style: style.clone(),
+                style: *style,
                 ..Cell::default()
             },
         );

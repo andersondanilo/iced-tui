@@ -32,7 +32,7 @@ impl Application for MyApp {
         subscription::events().map(Self::Message::EventOccurred)
     }
 
-    fn view(&mut self) -> Element<'_, Self::Message, TuiRenderer> {
+    fn view(&self) -> Element<'_, Self::Message, TuiRenderer> {
         Container::new(
             Row::new()
                 .spacing(4)

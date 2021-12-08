@@ -106,7 +106,7 @@ pub trait Application {
                 if let Err(err) = ui_iced_event_sender.unbounded_send(UiMessage::from_events(
                     term_events
                         .into_iter()
-                        .map(|k| Event::Keyboard(k))
+                        .map(Event::Keyboard)
                         .collect(),
                 )) {
                     log::error!(target: LOG_TARGET, "{}", err);
@@ -118,7 +118,7 @@ pub trait Application {
         let mapper = AppMessageMapperSink::from_sender(sender);
         let mut runtime = iced_futures::Runtime::new(runtime_executor, mapper);
 
-        let (app, command) = runtime.enter(|| Self::new());
+        let (app, command) = runtime.enter(Self::new);
         let application = Rc::new(RefCell::new(app));
 
         runtime.spawn(command);
@@ -370,7 +370,7 @@ impl<M> UiMessage<M> {
     fn from_events(events: Vec<Event>) -> Self {
         UiMessage {
             app_message: None,
-            events: events,
+            events,
         }
     }
 
@@ -389,7 +389,7 @@ struct AppMessageMapperSink<M> {
 
 impl<M> AppMessageMapperSink<M> {
     fn from_sender(sender: mpsc::UnboundedSender<UiMessage<M>>) -> Self {
-        Self { sender: sender }
+        Self { sender }
     }
 }
 
