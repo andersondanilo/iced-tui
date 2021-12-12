@@ -8,6 +8,7 @@ pub enum Primitive {
     Cell(u16, u16, Cell),
     Rectangle(u16, u16, u16, u16, Cell),
     Group(Vec<Primitive>),
+    CursorPosition(u16, u16, CursorStyle),
 }
 
 impl Primitive {
@@ -46,6 +47,12 @@ impl std::cmp::PartialEq for Primitive {
                     }
 
                     true
+                }
+                _ => false,
+            },
+            Self::CursorPosition(x, y, style) => match rhs {
+                Self::CursorPosition(rhs_x, rhs_y, rhs_style) => {
+                    x == rhs_x && y == rhs_y && style == rhs_style
                 }
                 _ => false,
             },
@@ -117,6 +124,10 @@ impl std::cmp::PartialEq for Style {
 }
 
 impl Style {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
     pub fn merge(mut self, other: &Self) -> Self {
         if other.fg_color.is_some() {
             self.fg_color = other.fg_color;
@@ -155,6 +166,42 @@ pub struct VirtualBuffer {
     pub height: u16,
     pub rows: Vec<Vec<Cell>>,
     pub hash: u64,
+    pub cursor_position: Option<(u16, u16, CursorStyle)>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum CursorShape {
+    UnderScore,
+    Line,
+    Block,
+}
+
+impl Default for CursorShape {
+    fn default() -> Self {
+        Self::Line
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct CursorStyle {
+    pub(crate) shape: CursorShape,
+    pub(crate) blinking: bool,
+}
+
+impl Default for CursorStyle {
+    fn default() -> Self {
+        Self {
+            shape: CursorShape::default(),
+            blinking: true,
+        }
+    }
+}
+
+impl CursorStyle {
+    pub fn blinking(mut self, enabled: bool) -> Self {
+        self.blinking = enabled;
+        self
+    }
 }
 
 impl Debug for VirtualBuffer {
@@ -185,6 +232,7 @@ impl VirtualBuffer {
             width,
             height,
             hash: 0,
+            cursor_position: None,
         }
     }
 
@@ -209,6 +257,7 @@ impl VirtualBuffer {
                     self.rows[y as usize][x as usize].merge(&cell);
                 }
             }
+            Primitive::CursorPosition(x, y, style) => self.cursor_position = Some((x, y, style)),
         };
     }
 
@@ -216,6 +265,9 @@ impl VirtualBuffer {
         let mut hasher = DefaultHasher::new();
         hasher.write_u16(self.width);
         hasher.write_u16(self.height);
+        hasher.write_u8(self.cursor_position.map(|_| 1).unwrap_or(0));
+        hasher.write_u16(self.cursor_position.map(|p| p.0).unwrap_or(0));
+        hasher.write_u16(self.cursor_position.map(|p| p.1).unwrap_or(0));
 
         for row in &self.rows {
             for cell in row {

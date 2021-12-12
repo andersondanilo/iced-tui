@@ -7,7 +7,7 @@ edition = "2018"
 
 [dependencies]
 iced_core = "0.4"
-iced_native = "0.4"
+iced_native = {version="0.4", path="../iced_native-0.4.0"}
 iced_futures = {version="0.3", features=["tokio"]}
 crossterm = "0.22"
 log = "0.4"

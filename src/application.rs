@@ -2,7 +2,6 @@ use crate::constants::LOG_TARGET;
 use crate::renderer::VirtualBuffer;
 use crate::TuiRenderer;
 use core::cell::RefCell;
-use core::fmt::Debug;
 pub use crossterm::{
     cursor,
     event::{self, KeyCode, KeyEvent},
@@ -15,6 +14,8 @@ use iced_core::Size;
 use iced_futures::futures::{self, channel::mpsc, Sink};
 use iced_native::clipboard;
 use iced_native::keyboard;
+use iced_native::mouse;
+use iced_native::window;
 use iced_native::Command;
 use iced_native::Event;
 use iced_native::Executor;
@@ -22,11 +23,14 @@ use iced_native::Subscription;
 use iced_native::UserInterface;
 use iced_native::{Cache, Element};
 use std::rc::Rc;
+use std::sync::atomic::AtomicU16;
+use std::sync::atomic::Ordering;
+use std::sync::Arc;
 use std::time::Duration;
 
 pub trait Application {
     type Executor: Executor;
-    type Message: Send + Clone + Debug;
+    type Message: Send + Clone;
 
     /// Initializes the Sanbox
     ///
@@ -47,7 +51,7 @@ pub trait Application {
     /// Returns the widgets to display in the [`Application`].
     ///
     /// These widgets can produce __messages__ based on user interaction.
-    fn view(&self) -> Element<'_, Self::Message, TuiRenderer>;
+    fn view(&mut self) -> Element<'_, Self::Message, TuiRenderer>;
 
     /// Returns the event [`Subscription`] for the current state of the
     /// application.
@@ -61,9 +65,9 @@ pub trait Application {
         Subscription::none()
     }
 
-    /// Returns whether the [`Application`] should be terminated.
+    /// Returns whether the [`Application`] should be terminated (and the exit status code).
     ///
-    /// By default, it returns `false`.
+    /// By default, it returns None.
     fn should_exit(&self) -> Option<u8> {
         None
     }
@@ -90,22 +94,48 @@ pub trait Application {
             std::process::exit(1);
         }));
 
+        let last_mouse_position = Arc::new((AtomicU16::new(0), AtomicU16::new(0)));
+
         // ui iced-events loop
+        //
         let ui_iced_event_sender = sender.clone();
+        let last_mouse_position_writer = last_mouse_position.clone();
         runtime_executor.spawn(async move {
             loop {
                 let event = event::read().unwrap();
 
-                let term_events = match event {
+                let iced_events = match event {
                     event::Event::Key(key_event) => {
                         map_keycode_event(key_event.code, key_event.modifiers)
+                            .into_iter()
+                            .map(Event::Keyboard)
+                            .collect()
                     }
-                    _ => vec![],
+                    event::Event::Mouse(mouse_event) => {
+                        last_mouse_position_writer
+                            .0
+                            .store(mouse_event.column, Ordering::Relaxed);
+
+                        last_mouse_position_writer
+                            .1
+                            .store(mouse_event.row, Ordering::Relaxed);
+
+                        map_mouse_event(mouse_event)
+                            .into_iter()
+                            .map(Event::Mouse)
+                            .collect()
+                    }
+                    event::Event::Resize(width, height) => {
+                        vec![Event::Window(window::Event::Resized {
+                            width: width as u32,
+                            height: height as u32,
+                        })]
+                    }
                 };
 
-                if let Err(err) = ui_iced_event_sender.unbounded_send(UiMessage::from_events(
-                    term_events.into_iter().map(Event::Keyboard).collect(),
-                )) {
+                if let Err(err) =
+                    ui_iced_event_sender.unbounded_send(UiMessage::from_events(iced_events))
+                {
                     log::error!(target: LOG_TARGET, "{}", err);
                     return;
                 }
@@ -140,9 +170,13 @@ pub trait Application {
                     width: width as f32,
                     height: height as f32,
                 };
-                let cursor_position = Point { x: 0.0, y: 0.0 };
 
-                log::debug!(target: LOG_TARGET, "received message {:?}", ui_message);
+                let cursor_position = Point {
+                    x: (&last_mouse_position.0.load(Ordering::Relaxed)).clone() as f32,
+                    y: (&last_mouse_position.1.load(Ordering::Relaxed)).clone() as f32,
+                };
+
+                //log::debug!(target: LOG_TARGET, "received message");
 
                 // render and return messages
                 let mut app_bmut = application.borrow_mut();
@@ -156,7 +190,7 @@ pub trait Application {
                     last_vbuffer = Some(vbuffer);
                 }
 
-                let (messages, event_statuses, events) = match current_ui_message {
+                let (messages, event_statuses, events, ui_updated) = match current_ui_message {
                     Some(ui_message) => {
                         let mut messages: Vec<Self::Message> = match ui_message.app_message {
                             Some(m) => vec![m],
@@ -164,6 +198,7 @@ pub trait Application {
                         };
                         let mut event_statuses = vec![];
                         let events = ui_message.events.clone();
+                        let mut ui_updated = false;
 
                         if !ui_message.events.is_empty() {
                             event_statuses = ui.update(
@@ -173,11 +208,12 @@ pub trait Application {
                                 &mut clipboard::Null,
                                 &mut messages,
                             );
+                            ui_updated = true;
                         }
 
-                        (messages, event_statuses, events)
+                        (messages, event_statuses, events, ui_updated)
                     }
-                    None => (vec![], vec![], vec![]),
+                    None => (vec![], vec![], vec![], false),
                 };
 
                 cache = Some(ui.into_cache());
@@ -187,6 +223,10 @@ pub trait Application {
 
                 for message in messages {
                     commands.push(app_bmut.update(message));
+                    state_updated = true;
+                }
+
+                if ui_updated {
                     state_updated = true;
                 }
 
@@ -200,19 +240,19 @@ pub trait Application {
             }
 
             for (event, event_status) in events.iter().zip(event_statuses) {
-                log::debug!(
-                    target: LOG_TARGET,
-                    "broadcasting event: {:?}, status: {:?}",
-                    event,
-                    event_status
-                );
+                //log::debug!(
+                //    target: LOG_TARGET,
+                //    "broadcasting event: {:?}, status: {:?}",
+                //    event,
+                //    event_status
+                //);
                 runtime.broadcast((event.clone(), event_status));
             }
 
             runtime.track(subscription);
 
             if let Some(status_code) = application.borrow().should_exit() {
-                log::debug!(target: LOG_TARGET, "Exiting app");
+                //log::debug!(target: LOG_TARGET, "Exiting app");
                 break status_code;
             }
 
@@ -310,7 +350,7 @@ fn term_keycode_to_iced(term_keycode: event::KeyCode) -> Option<keyboard::KeyCod
             11 => Some(keyboard::KeyCode::F11),
             12 => Some(keyboard::KeyCode::F12),
             _ => None,
-        }, // TODO: Map F* keys
+        },
         event::KeyCode::Char(c) => keycode_from_char(c),
         event::KeyCode::Null => None,
         event::KeyCode::Esc => Some(keyboard::KeyCode::Escape),
@@ -354,6 +394,35 @@ fn keycode_from_char(c: char) -> Option<keyboard::KeyCode> {
         Some('Y') => Some(keyboard::KeyCode::Y),
         Some('Z') => Some(keyboard::KeyCode::Z),
         _ => None,
+    }
+}
+
+fn map_mouse_event(mouse_event: event::MouseEvent) -> Vec<mouse::Event> {
+    match mouse_event.kind {
+        event::MouseEventKind::Down(button) => {
+            vec![mouse::Event::ButtonPressed(map_mouse_button(button))]
+        }
+        event::MouseEventKind::Up(button) => {
+            vec![mouse::Event::ButtonReleased(map_mouse_button(button))]
+        }
+        event::MouseEventKind::Drag(_) => vec![],
+        event::MouseEventKind::Moved => vec![mouse::Event::CursorMoved {
+            position: Point::new(mouse_event.column as f32, mouse_event.row as f32),
+        }],
+        event::MouseEventKind::ScrollDown => vec![mouse::Event::WheelScrolled {
+            delta: mouse::ScrollDelta::Lines { x: 0_f32, y: 1_f32 },
+        }],
+        event::MouseEventKind::ScrollUp => vec![mouse::Event::WheelScrolled {
+            delta: mouse::ScrollDelta::Lines { x: 0_f32, y: 1_f32 },
+        }],
+    }
+}
+
+fn map_mouse_button(button: event::MouseButton) -> mouse::Button {
+    match button {
+        event::MouseButton::Left => mouse::Button::Left,
+        event::MouseButton::Right => mouse::Button::Right,
+        event::MouseButton::Middle => mouse::Button::Middle,
     }
 }
 

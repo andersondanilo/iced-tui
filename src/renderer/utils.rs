@@ -1,4 +1,4 @@
-use super::primitives::Primitive;
+use super::primitives::{Cell, Primitive, Style};
 use super::tui_renderer::TuiRenderer;
 use iced_native::{
     layout::Layout, layout::Limits, Element, Point, Rectangle, Renderer, Size, Vector,
@@ -133,8 +133,82 @@ fn round_layout_list(
     results
 }
 
+pub fn crop_text_to_bounds(
+    content: &str,
+    size: Option<Size>,
+    start_x: u16,
+    start_y: u16,
+    auto_wrap: bool,
+    return_primitives: bool,
+    style: Style,
+    allow_wrap: bool,
+) -> (Vec<Primitive>, u16, u16) {
+    let mut primitive_cells: Vec<Primitive> = Vec::with_capacity(content.len());
+    let bounds_width_i = size.map(|s| s.width as u16).unwrap_or(u16::MAX);
+    let bounds_height_i = size.map(|s| s.height as u16).unwrap_or(u16::MAX);
+    let mut current_x: u16 = start_x;
+    let mut current_y: u16 = start_y;
+    let mut filled_width: u16 = 0;
+    let mut filled_height: u16 = 1;
+
+    let mut row_width: u16 = 0;
+
+    for c in content.chars() {
+        if c == '\n' || (row_width >= bounds_width_i && auto_wrap) {
+            // go to next row, or break if not possible
+            if allow_wrap && filled_height < bounds_height_i {
+                current_x = start_x;
+                row_width = 0;
+                current_y += 1;
+                filled_height += 1;
+            } else {
+                break;
+            }
+        }
+
+        if row_width >= bounds_width_i || c == '\n' {
+            continue;
+        }
+
+        if !is_printable(c) {
+            continue;
+        }
+
+        // add char to current row, if inside width bounds
+        if return_primitives {
+            primitive_cells.push(Primitive::Cell(
+                current_x,
+                current_y,
+                Cell {
+                    content: Some(c),
+                    style,
+                },
+            ));
+        }
+
+        current_x += 1;
+        row_width += 1;
+
+        if row_width > filled_width {
+            filled_width = row_width;
+        }
+    }
+
+    if row_width == 0 && filled_height > 0 {
+        filled_height -= 1;
+    }
+
+    (primitive_cells, filled_width, filled_height)
+}
+
+fn is_printable(c: char) -> bool {
+    c as u32 >= 30
+}
+
 #[cfg(test)]
 mod tests {
+    use super::super::primitives::{Primitive, Style};
+    use super::crop_text_to_bounds;
     use super::{round_layout_list, RoundDirection};
     use iced_native::{
         layout::{Layout, Node},
@@ -273,5 +347,293 @@ mod tests {
         for (index, expected_bound) in expected_rectangles.iter().enumerate() {
             assert_eq!(&rectangles[index], expected_bound);
         }
+    }
+
+    #[test]
+    fn it_get_primitives_from_crop_text() {
+        let (primitives, width, height) = crop_text_to_bounds(
+            "Hello\nPan",
+            Some(Size::new(50., 50.)),
+            10,
+            10,
+            false,
+            true,
+            Style::default(),
+            true,
+        );
+
+        assert_eq!(width, 5);
+        assert_eq!(height, 2);
+
+        let expected_primitives = vec![
+            Primitive::from_char(10, 10, 'H'),
+            Primitive::from_char(11, 10, 'e'),
+            Primitive::from_char(12, 10, 'l'),
+            Primitive::from_char(13, 10, 'l'),
+            Primitive::from_char(14, 10, 'o'),
+            Primitive::from_char(10, 11, 'P'),
+            Primitive::from_char(11, 11, 'a'),
+            Primitive::from_char(12, 11, 'n'),
+        ];
+
+        for (i, expected_primitive) in expected_primitives.iter().enumerate() {
+            assert!(
+                primitives.len() > i,
+                "should have primitive at index {}, ({})",
+                primitives.len(),
+                match expected_primitive {
+                    Primitive::Cell(x, y, cell) => {
+                        format!("x: {}, y: {}, char: {}", x, y, cell.content.unwrap())
+                    }
+                    _ => "".to_string(),
+                }
+            );
+            assert_eq!(&primitives[i], expected_primitive);
+        }
+
+        assert_eq!(primitives.len(), expected_primitives.len());
+    }
+
+    #[test]
+    fn it_crop_text_horizontally() {
+        let (primitives, width, height) = crop_text_to_bounds(
+            "Hello\nPan\nLon\nIon\n",
+            Some(Size::new(3., 10.)),
+            10,
+            10,
+            false,
+            true,
+            Style::default(),
+            true,
+        );
+
+        assert_eq!(width, 3);
+        assert_eq!(height, 4);
+
+        let expected_primitives = vec![
+            Primitive::from_char(10, 10, 'H'),
+            Primitive::from_char(11, 10, 'e'),
+            Primitive::from_char(12, 10, 'l'),
+            Primitive::from_char(10, 11, 'P'),
+            Primitive::from_char(11, 11, 'a'),
+            Primitive::from_char(12, 11, 'n'),
+            Primitive::from_char(10, 12, 'L'),
+            Primitive::from_char(11, 12, 'o'),
+            Primitive::from_char(12, 12, 'n'),
+            Primitive::from_char(10, 13, 'I'),
+            Primitive::from_char(11, 13, 'o'),
+            Primitive::from_char(12, 13, 'n'),
+        ];
+
+        for (i, expected_primitive) in expected_primitives.iter().enumerate() {
+            assert!(
+                primitives.len() > i,
+                "should have primitive at index {}, ({})",
+                primitives.len(),
+                match expected_primitive {
+                    Primitive::Cell(x, y, cell) => {
+                        format!("x: {}, y: {}, char: {}", x, y, cell.content.unwrap())
+                    }
+                    _ => "".to_string(),
+                }
+            );
+            assert_eq!(&primitives[i], expected_primitive);
+        }
+
+        assert_eq!(primitives.len(), expected_primitives.len());
+    }
+
+    #[test]
+    fn it_crop_text_vertically() {
+        let (primitives, width, height) = crop_text_to_bounds(
+            "Hello\nPan\nLon\nIon\n",
+            Some(Size::new(10., 3.)),
+            10,
+            10,
+            false,
+            true,
+            Style::default(),
+            true,
+        );
+
+        assert_eq!(width, 5);
+        assert_eq!(height, 3);
+
+        let expected_primitives = vec![
+            Primitive::from_char(10, 10, 'H'),
+            Primitive::from_char(11, 10, 'e'),
+            Primitive::from_char(12, 10, 'l'),
+            Primitive::from_char(13, 10, 'l'),
+            Primitive::from_char(14, 10, 'o'),
+            Primitive::from_char(10, 11, 'P'),
+            Primitive::from_char(11, 11, 'a'),
+            Primitive::from_char(12, 11, 'n'),
+            Primitive::from_char(10, 12, 'L'),
+            Primitive::from_char(11, 12, 'o'),
+            Primitive::from_char(12, 12, 'n'),
+        ];
+
+        for (i, expected_primitive) in expected_primitives.iter().enumerate() {
+            assert!(
+                primitives.len() > i,
+                "should have primitive at index {}, ({})",
+                primitives.len(),
+                match expected_primitive {
+                    Primitive::Cell(x, y, cell) => {
+                        format!("x: {}, y: {}, char: {}", x, y, cell.content.unwrap())
+                    }
+                    _ => "".to_string(),
+                }
+            );
+            assert_eq!(&primitives[i], expected_primitive);
+        }
+
+        assert_eq!(primitives.len(), expected_primitives.len());
+    }
+
+    #[test]
+    fn it_auto_wrap_text() {
+        let (primitives, width, height) = crop_text_to_bounds(
+            "Hello\nPan\nLon\nIon\n",
+            Some(Size::new(3., 10.)),
+            10,
+            10,
+            true,
+            true,
+            Style::default(),
+            true,
+        );
+
+        assert_eq!(width, 3);
+        assert_eq!(height, 5);
+
+        let expected_primitives = vec![
+            Primitive::from_char(10, 10, 'H'),
+            Primitive::from_char(11, 10, 'e'),
+            Primitive::from_char(12, 10, 'l'),
+            Primitive::from_char(10, 11, 'l'),
+            Primitive::from_char(11, 11, 'o'),
+            Primitive::from_char(10, 12, 'P'),
+            Primitive::from_char(11, 12, 'a'),
+            Primitive::from_char(12, 12, 'n'),
+            Primitive::from_char(10, 13, 'L'),
+            Primitive::from_char(11, 13, 'o'),
+            Primitive::from_char(12, 13, 'n'),
+            Primitive::from_char(10, 14, 'I'),
+            Primitive::from_char(11, 14, 'o'),
+            Primitive::from_char(12, 14, 'n'),
+        ];
+
+        for (i, expected_primitive) in expected_primitives.iter().enumerate() {
+            assert!(
+                primitives.len() > i,
+                "should have primitive at index {}, ({})",
+                primitives.len(),
+                match expected_primitive {
+                    Primitive::Cell(x, y, cell) => {
+                        format!("x: {}, y: {}, char: {}", x, y, cell.content.unwrap())
+                    }
+                    _ => "".to_string(),
+                }
+            );
+            assert_eq!(&primitives[i], expected_primitive);
+        }
+
+        assert_eq!(primitives.len(), expected_primitives.len());
+    }
+
+    #[test]
+    fn it_ignore_non_printable() {
+        let (primitives, width, height) = crop_text_to_bounds(
+            "Hello\n\tPan\nLon\nI\ton\n",
+            Some(Size::new(3., 10.)),
+            10,
+            10,
+            true,
+            true,
+            Style::default(),
+            true,
+        );
+
+        let expected_primitives = vec![
+            Primitive::from_char(10, 10, 'H'),
+            Primitive::from_char(11, 10, 'e'),
+            Primitive::from_char(12, 10, 'l'),
+            Primitive::from_char(10, 11, 'l'),
+            Primitive::from_char(11, 11, 'o'),
+            Primitive::from_char(10, 12, 'P'),
+            Primitive::from_char(11, 12, 'a'),
+            Primitive::from_char(12, 12, 'n'),
+            Primitive::from_char(10, 13, 'L'),
+            Primitive::from_char(11, 13, 'o'),
+            Primitive::from_char(12, 13, 'n'),
+            Primitive::from_char(10, 14, 'I'),
+            Primitive::from_char(11, 14, 'o'),
+            Primitive::from_char(12, 14, 'n'),
+        ];
+
+        for (i, expected_primitive) in expected_primitives.iter().enumerate() {
+            assert!(
+                primitives.len() > i,
+                "should have primitive at index {}, ({})",
+                primitives.len(),
+                match expected_primitive {
+                    Primitive::Cell(x, y, cell) => {
+                        format!("x: {}, y: {}, char: {}", x, y, cell.content.unwrap())
+                    }
+                    _ => "".to_string(),
+                }
+            );
+            assert_eq!(&primitives[i], expected_primitive);
+        }
+
+        assert_eq!(width, 3);
+        assert_eq!(height, 5);
+        assert_eq!(primitives.len(), expected_primitives.len());
+    }
+
+    #[test]
+    fn it_dont_ignore_space() {
+        let (primitives, width, height) = crop_text_to_bounds(
+            "Hello Pan",
+            Some(Size::new(3., 10.)),
+            10,
+            10,
+            true,
+            true,
+            Style::default(),
+            true,
+        );
+
+        let expected_primitives = vec![
+            Primitive::from_char(10, 10, 'H'),
+            Primitive::from_char(11, 10, 'e'),
+            Primitive::from_char(12, 10, 'l'),
+            Primitive::from_char(10, 11, 'l'),
+            Primitive::from_char(11, 11, 'o'),
+            Primitive::from_char(12, 11, ' '),
+            Primitive::from_char(10, 12, 'P'),
+            Primitive::from_char(11, 12, 'a'),
+            Primitive::from_char(12, 12, 'n'),
+        ];
+
+        for (i, expected_primitive) in expected_primitives.iter().enumerate() {
+            assert!(
+                primitives.len() > i,
+                "should have primitive at index {}, ({})",
+                primitives.len(),
+                match expected_primitive {
+                    Primitive::Cell(x, y, cell) => {
+                        format!("x: {}, y: {}, char: {}", x, y, cell.content.unwrap())
+                    }
+                    _ => "".to_string(),
+                }
+            );
+            assert_eq!(&primitives[i], expected_primitive);
+        }
+
+        assert_eq!(width, 3);
+        assert_eq!(height, 3);
+        assert_eq!(primitives.len(), expected_primitives.len());
     }
 }

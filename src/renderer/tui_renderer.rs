@@ -1,4 +1,4 @@
-use super::primitives::{Cell, Primitive, Style, VirtualBuffer};
+use super::primitives::{self, Cell, Primitive, Style, VirtualBuffer};
 use crossterm::{cursor, execute, queue, terminal};
 use iced_native::{Color, Renderer};
 
@@ -7,7 +7,12 @@ pub struct TuiRenderer {}
 impl TuiRenderer {
     pub fn begin_screen(&mut self, stdout: &mut std::io::Stdout) {
         terminal::enable_raw_mode().unwrap();
-        execute!(stdout, terminal::EnterAlternateScreen).unwrap();
+        execute!(
+            stdout,
+            terminal::EnterAlternateScreen,
+            crossterm::event::EnableMouseCapture
+        )
+        .unwrap();
     }
 
     pub fn end_screen(&mut self, stdout: &mut std::io::Stdout) {
@@ -105,7 +110,30 @@ impl TuiRenderer {
             }
         }
 
-        queue!(output, cursor::MoveTo(0, 0)).unwrap();
+        match vbuffer.cursor_position {
+            Some((x, y, style)) => {
+                queue!(
+                    output,
+                    cursor::Show,
+                    cursor::MoveTo(x, y),
+                    cursor::SetCursorShape(match style.shape {
+                        primitives::CursorShape::Line => cursor::CursorShape::Line,
+                        primitives::CursorShape::Block => cursor::CursorShape::Block,
+                        primitives::CursorShape::UnderScore => cursor::CursorShape::UnderScore,
+                    }),
+                )
+                .unwrap();
+
+                if style.blinking {
+                    queue!(output, cursor::EnableBlinking);
+                } else {
+                    queue!(output, cursor::DisableBlinking);
+                }
+            }
+            None => {
+                queue!(output, cursor::MoveTo(0, 0), cursor::Hide).unwrap();
+            }
+        }
 
         output.flush().unwrap();
 
