@@ -13,7 +13,7 @@ pub struct TextInputStyle {
 
 impl Default for TextInputStyle {
     fn default() -> Self {
-        TextInputStyle {
+        Self {
             normal: Style::default(),
             focused: Style::default(),
             placeholder: Style::default(),

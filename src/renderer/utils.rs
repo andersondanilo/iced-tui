@@ -1,5 +1,6 @@
 use super::primitives::{Cell, Primitive, Style};
 use super::tui_renderer::TuiRenderer;
+use iced_native::layout::Node;
 use iced_native::{
     layout::Layout, layout::Limits, Element, Point, Rectangle, Renderer, Size, Vector,
 };
@@ -133,6 +134,35 @@ fn round_layout_list(
     results
 }
 
+pub fn round_individual_layout<'a, Message, Renderer>(
+    container_bounds: Rectangle,
+    original_content_layout: Layout<'a>,
+    content: &Element<'_, Message, Renderer>,
+    renderer: &Renderer,
+) -> (Vector, Node)
+where
+    Renderer: iced_native::Renderer,
+{
+    let original_content_layout_bounds = original_content_layout.bounds();
+    let limits = Limits::new(
+        Size::ZERO,
+        Size::new(
+            container_bounds.width.round(),
+            container_bounds.height.round(),
+        ),
+    );
+    let mut node = content.layout(renderer, &limits);
+    let node_position = Point::new(
+        original_content_layout_bounds.x.round() - container_bounds.x.round(),
+        original_content_layout_bounds.y.round() - container_bounds.y.round(),
+    );
+    node.move_to(node_position);
+
+    let layout_offset = Vector::new(container_bounds.x, container_bounds.y);
+
+    (layout_offset, node)
+}
+
 pub fn crop_text_to_bounds(
     content: &str,
     size: Option<Size>,
@@ -142,16 +172,16 @@ pub fn crop_text_to_bounds(
     return_primitives: bool,
     style: Style,
     allow_wrap: bool,
-) -> (Vec<Primitive>, u16, u16) {
+) -> (Vec<Primitive>, u32, u32) {
     let mut primitive_cells: Vec<Primitive> = Vec::with_capacity(content.len());
-    let bounds_width_i = size.map(|s| s.width as u16).unwrap_or(u16::MAX);
-    let bounds_height_i = size.map(|s| s.height as u16).unwrap_or(u16::MAX);
+    let bounds_width_i = size.map(|s| s.width as u32).unwrap_or(u32::MAX);
+    let bounds_height_i = size.map(|s| s.height as u32).unwrap_or(u32::MAX);
     let mut current_x: u16 = start_x;
     let mut current_y: u16 = start_y;
-    let mut filled_width: u16 = 0;
-    let mut filled_height: u16 = 1;
+    let mut filled_width: u32 = 0;
+    let mut filled_height: u32 = 1;
 
-    let mut row_width: u16 = 0;
+    let mut row_width: u32 = 0;
 
     for c in content.chars() {
         if c == '\n' || (row_width >= bounds_width_i && auto_wrap) {

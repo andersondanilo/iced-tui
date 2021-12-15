@@ -1,8 +1,7 @@
 use super::primitives::{Cell, Primitive, Style};
 use super::tui_renderer::TuiRenderer;
-use iced_native::layout::Limits;
-use iced_native::Vector;
-use iced_native::{container, Element, Layout, Point, Rectangle, Size};
+use crate::renderer::utils::round_individual_layout;
+use iced_native::{container, Element, Layout, Point, Rectangle};
 
 impl container::Renderer for TuiRenderer {
     type Style = Style;
@@ -17,26 +16,12 @@ impl container::Renderer for TuiRenderer {
         content: &Element<'_, Message, Self>,
         original_content_layout: Layout<'_>,
     ) -> <Self as iced_native::Renderer>::Output {
-        let original_content_layout_bounds = original_content_layout.bounds();
-        let limits = Limits::new(
-            Size::ZERO,
-            Size::new(
-                container_bounds.width.round(),
-                container_bounds.height.round(),
-            ),
-        );
-        let mut node = content.layout(self, &limits);
-        let node_position = Point::new(
-            original_content_layout_bounds.x.round() - container_bounds.x.round(),
-            original_content_layout_bounds.y.round() - container_bounds.y.round(),
-        );
-        node.move_to(node_position);
-
-        let layout_offset = Vector::new(container_bounds.x, container_bounds.y);
-
+        let (layout_offset, node) =
+            round_individual_layout(container_bounds, original_content_layout, content, self);
         let new_elem_layout = Layout::with_offset(layout_offset, &node);
 
-        let content = content.draw(self, defaults, new_elem_layout, cursor_position, viewport);
+        let content_primitive =
+            content.draw(self, defaults, new_elem_layout, cursor_position, viewport);
 
         let rectangle = Primitive::Rectangle(
             container_bounds.x.round() as u16,
@@ -49,6 +34,6 @@ impl container::Renderer for TuiRenderer {
             },
         );
 
-        Primitive::Group(vec![rectangle, content])
+        Primitive::Group(vec![rectangle, content_primitive])
     }
 }

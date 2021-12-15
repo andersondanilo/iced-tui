@@ -1,9 +1,8 @@
 use iced_futures::executor::Tokio;
-use iced_native::text_input;
 use iced_native::Subscription;
 use iced_native::{
-    keyboard, subscription, Color, Column, Command, Container, Element, Event, HorizontalAlignment,
-    Length, Row, Text, TextInput,
+    button, keyboard, subscription, text_input, Button, Color, Column, Command, Container, Element,
+    Event, HorizontalAlignment, Length, Row, Space, Text, TextInput,
 };
 use iced_tui::{Application, Style, TuiRenderer};
 use simplelog::{Config, LevelFilter, WriteLogger};
@@ -12,6 +11,7 @@ pub struct MyApp {
     should_exit: Option<u8>,
     text_state: text_input::State,
     input_value: String,
+    button_state: button::State,
 }
 
 #[derive(Clone, Debug)]
@@ -32,6 +32,7 @@ impl Application for MyApp {
                 should_exit: None,
                 text_state,
                 input_value: "".to_string(),
+                button_state: button::State::default(),
             },
             Command::none(),
         )
@@ -55,12 +56,14 @@ impl Application for MyApp {
                     Row::new()
                         .spacing(1)
                         .push(Text::new("Name: "))
+                        .push(Space::new(Length::Units(3), Length::Units(1)))
                         .push(TextInput::new(
                             &mut self.text_state,
                             "Type something",
                             &self.input_value,
                             AppMessage::InputValueChanged,
-                        )),
+                        ))
+                        .push(Button::new(&mut self.button_state, Text::new(" Send "))),
                 ),
         )
         .into()
