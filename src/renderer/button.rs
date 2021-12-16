@@ -71,15 +71,15 @@ impl button::Renderer for TuiRenderer {
         let content_primitive =
             content.draw(self, defaults, new_elem_layout, cursor_position, &bounds);
 
-        let selected_style = if is_disabled {
-            button_style.disabled
+        let selected_style = button_style.normal.try_merge(if is_disabled {
+            Some(&button_style.disabled)
         } else if is_pressed {
-            button_style.pressed
+            Some(&button_style.pressed)
         } else if bounds.contains(cursor_position) {
-            button_style.hover
+            Some(&button_style.hover)
         } else {
-            button_style.normal
-        };
+            None
+        });
 
         let rectangle = Primitive::Rectangle(
             bounds.x.round() as u16,

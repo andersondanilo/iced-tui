@@ -81,6 +81,11 @@ impl Cell {
 
         self.style = self.style.merge(&other.style);
     }
+
+    pub fn style(mut self, style: Style) -> Self {
+        self.style = style;
+        self
+    }
 }
 
 impl Default for Cell {
@@ -128,6 +133,13 @@ impl Style {
         Self::default()
     }
 
+    pub fn try_merge(self, other: Option<&Self>) -> Self {
+        match other {
+            Some(style) => self.merge(style),
+            None => self,
+        }
+    }
+
     pub fn merge(mut self, other: &Self) -> Self {
         if other.fg_color.is_some() {
             self.fg_color = other.fg_color;
@@ -149,13 +161,19 @@ impl Style {
         self
     }
 
-    pub fn bg(mut self, color: Color) -> Self {
-        self.bg_color = Some(color);
+    pub fn bg<C>(mut self, color: C) -> Self
+    where
+        C: Into<Color>,
+    {
+        self.bg_color = Some(color.into());
         self
     }
 
-    pub fn fg(mut self, color: Color) -> Self {
-        self.fg_color = Some(color);
+    pub fn fg<C>(mut self, color: C) -> Self
+    where
+        C: Into<Color>,
+    {
+        self.fg_color = Some(color.into());
         self
     }
 }

@@ -1,6 +1,7 @@
+use super::colors::get_crossterm_color;
 use super::primitives::{self, Cell, Primitive, Style, VirtualBuffer};
 use crossterm::{cursor, execute, queue, terminal};
-use iced_native::{Color, Renderer};
+use iced_native::Renderer;
 
 pub struct TuiRenderer {}
 
@@ -70,7 +71,7 @@ impl TuiRenderer {
                 if let Some(fg_color) = style.fg_color {
                     queue!(
                         output,
-                        crossterm::style::SetForegroundColor(to_term_color(fg_color))
+                        crossterm::style::SetForegroundColor(get_crossterm_color(fg_color))
                     )
                     .unwrap();
                     fg_changed = true;
@@ -79,7 +80,7 @@ impl TuiRenderer {
                 if let Some(bg_color) = style.bg_color {
                     queue!(
                         output,
-                        crossterm::style::SetBackgroundColor(to_term_color(bg_color))
+                        crossterm::style::SetBackgroundColor(get_crossterm_color(bg_color))
                     )
                     .unwrap();
                     bg_changed = true;
@@ -163,18 +164,6 @@ fn split_by_style(cells: &[Cell]) -> Vec<(Style, String)> {
     }
 
     results
-}
-
-fn to_term_color(color: Color) -> crossterm::style::Color {
-    crossterm::style::Color::Rgb {
-        r: to_term_color_channel(color.r),
-        g: to_term_color_channel(color.g),
-        b: to_term_color_channel(color.b),
-    }
-}
-
-fn to_term_color_channel(color_channel: f32) -> u8 {
-    (255.0 * color_channel).round() as u8
 }
 
 impl Renderer for TuiRenderer {

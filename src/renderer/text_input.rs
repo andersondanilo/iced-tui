@@ -8,6 +8,7 @@ pub struct TextInputStyle {
     pub(crate) normal: Style,
     pub(crate) focused: Style,
     pub(crate) placeholder: Style,
+    pub(crate) hover: Style,
     pub(crate) cursor: CursorStyle,
 }
 
@@ -17,6 +18,7 @@ impl Default for TextInputStyle {
             normal: Style::default(),
             focused: Style::default(),
             placeholder: Style::default(),
+            hover: Style::default(),
             cursor: CursorStyle::default(),
         }
     }
@@ -39,6 +41,11 @@ impl TextInputStyle {
 
     pub fn placeholder(mut self, placeholder: Style) -> Self {
         self.placeholder = placeholder;
+        self
+    }
+
+    pub fn hover(mut self, hover: Style) -> Self {
+        self.hover = hover;
         self
     }
 
@@ -87,9 +94,9 @@ impl text_input::Renderer for TuiRenderer {
 
     fn draw(
         &mut self,
-        _bounds: iced_core::Rectangle,
+        bounds: iced_core::Rectangle,
         text_bounds: iced_core::Rectangle,
-        _cursor_position: iced_core::Point,
+        cursor_position: iced_core::Point,
         font: <Self as iced_native::text::Renderer>::Font,
         size: u16,
         placeholder: &str,
@@ -111,11 +118,13 @@ impl text_input::Renderer for TuiRenderer {
         let start_y = text_bounds.y.round() as u16;
         let text_bounds_width = text_bounds.width.round() as u16;
 
-        let main_style = if state.is_focused() {
-            style.focused
+        let main_style = style.normal.try_merge(if state.is_focused() {
+            Some(&style.focused)
+        } else if bounds.contains(cursor_position) {
+            Some(&style.hover)
         } else {
-            style.normal
-        };
+            None
+        });
 
         let text_style = if rendered_is_placeholder {
             main_style.merge(&style.placeholder)

@@ -1,10 +1,12 @@
 use iced_futures::executor::Tokio;
 use iced_native::Subscription;
 use iced_native::{
-    button, keyboard, subscription, text_input, Button, Color, Column, Command, Container, Element,
-    Event, HorizontalAlignment, Length, Row, Space, Text, TextInput,
+    button, keyboard, subscription, text_input, Button, Column, Command, Container, Element, Event,
+    Length, ProgressBar, Row, Space, Text, TextInput,
 };
-use iced_tui::{Application, Style, TuiRenderer};
+use iced_tui::{
+    AnsiColor, Application, ButtonStyle, ProgressBarStyle, Style, TextInputStyle, TuiRenderer,
+};
 use simplelog::{Config, LevelFilter, WriteLogger};
 
 pub struct MyApp {
@@ -18,6 +20,7 @@ pub struct MyApp {
 pub enum AppMessage {
     EventOccurred(Event),
     InputValueChanged(String),
+    ButtonPressed,
 }
 
 impl Application for MyApp {
@@ -57,13 +60,40 @@ impl Application for MyApp {
                         .spacing(1)
                         .push(Text::new("Name: "))
                         .push(Space::new(Length::Units(3), Length::Units(1)))
-                        .push(TextInput::new(
-                            &mut self.text_state,
-                            "Type something",
-                            &self.input_value,
-                            AppMessage::InputValueChanged,
-                        ))
-                        .push(Button::new(&mut self.button_state, Text::new(" Send "))),
+                        .push(
+                            TextInput::new(
+                                &mut self.text_state,
+                                "Type something",
+                                &self.input_value,
+                                AppMessage::InputValueChanged,
+                            )
+                            .style(
+                                TextInputStyle::new()
+                                    .normal(Style::new().bg(AnsiColor::Black))
+                                    .hover(Style::new().bold())
+                                    .focused(Style::new().bg(AnsiColor::Cyan))
+                                    .placeholder(Style::new().fg(AnsiColor::DarkYellow)),
+                            ),
+                        )
+                        .push(
+                            Button::new(&mut self.button_state, Text::new(" Send "))
+                                .style(
+                                    ButtonStyle::new()
+                                        .normal(
+                                            Style::new().bg(AnsiColor::Red).fg(AnsiColor::White),
+                                        )
+                                        .hover(Style::new().bg(AnsiColor::DarkRed))
+                                        .pressed(Style::new().bg(AnsiColor::Blue)),
+                                )
+                                .on_press(AppMessage::ButtonPressed),
+                        ),
+                )
+                .push(
+                    ProgressBar::new(0.0..=256.0, 34.0).style(
+                        ProgressBarStyle::new()
+                            .fg(AnsiColor::Green)
+                            .bg(AnsiColor::Black),
+                    ),
                 ),
         )
         .into()
@@ -92,6 +122,7 @@ impl Application for MyApp {
                 self.input_value = value;
                 Command::none()
             }
+            AppMessage::ButtonPressed => Command::none(),
         }
     }
 }
