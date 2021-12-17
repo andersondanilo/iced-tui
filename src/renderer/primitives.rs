@@ -36,6 +36,7 @@ impl PrimitiveCell {
     }
 }
 
+#[derive(Clone)]
 pub struct Primitive {
     pub(crate) cells: BTreeMap<(u16, u16), Cell>,
     pub(crate) cursor_position: Option<CursorPosition>,

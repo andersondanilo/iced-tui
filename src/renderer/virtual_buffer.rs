@@ -40,59 +40,58 @@ impl VirtualBuffer {
     }
 }
 
-// #[cfg(test)]
-// mod tests {
-//     extern crate test;
-//
-//     use super::{Cell, Primitive, Style, VirtualBuffer};
-//     use iced_native::Color;
-//     use test::{black_box, Bencher};
-//
-//     #[bench]
-//     fn bench_merge_primitive_and_calc_hash(b: &mut Bencher) {
-//         let mut primitives = vec![];
-//
-//         for x in 0_u8..100_u8 {
-//             let mut primitives_group = vec![];
-//
-//             for y in 0_u8..25_u8 {
-//                 primitives_group.push(Primitive::Cell(
-//                     x as u16,
-//                     (y * 4) as u16,
-//                     Cell {
-//                         content: Some('a'),
-//                         style: Style {
-//                             fg_color: Some(Color::from_rgb8(x, x + 10_u8, x + 5_u8)),
-//                             bg_color: Some(Color::from_rgb8(x, x + 8_u8, x + 7_u8)),
-//                             is_bold: true,
-//                         },
-//                     },
-//                 ));
-//             }
-//
-//             primitives.push(Primitive::Group(primitives_group));
-//
-//             if x < 90_u8 {
-//                 primitives.push(Primitive::Rectangle(
-//                     x as u16,
-//                     (100 - x) as u16,
-//                     10 as u16,
-//                     10 as u16,
-//                     Cell::from_char('a'),
-//                 ));
-//             }
-//         }
-//
-//         b.iter(|| {
-//             black_box({
-//                 let mut virtual_buffer = VirtualBuffer::from_size(100, 100);
-//                 let primitives = primitives.clone();
-//
-//                 for primitive in primitives {
-//                     virtual_buffer.merge_primitive(primitive);
-//                 }
-//                 virtual_buffer.calc_hash();
-//             });
-//         });
-//     }
-// }
+#[cfg(test)]
+mod tests {
+    extern crate test;
+
+    use super::super::primitives::{Cell, Primitive, PrimitiveCell};
+    use super::super::style::Style;
+    use super::VirtualBuffer;
+    use iced_native::Color;
+    use test::{black_box, Bencher};
+
+    #[bench]
+    fn bench_merge_primitive(b: &mut Bencher) {
+        let mut primitives = vec![];
+
+        for x in 0_u8..100_u8 {
+            let mut primitives_group = vec![];
+
+            for y in 0_u8..25_u8 {
+                primitives_group.push(PrimitiveCell::new(
+                    x as u16,
+                    (y * 4) as u16,
+                    Cell {
+                        content: Some('a'),
+                        style: Style {
+                            fg_color: Some(Color::from_rgb8(x, x + 10_u8, x + 5_u8)),
+                            bg_color: Some(Color::from_rgb8(x, x + 8_u8, x + 7_u8)),
+                            is_bold: true,
+                        },
+                    },
+                ));
+            }
+
+            primitives.push(Primitive::from_cells(primitives_group));
+
+            if x < 90_u8 {
+                primitives.push(Primitive::rectangle(
+                    x as u16,
+                    (100 - x) as u16,
+                    10 as u16,
+                    10 as u16,
+                    Cell::from_char('a'),
+                ));
+            }
+        }
+
+        let primitive = Primitive::merge(primitives);
+
+        b.iter(|| {
+            black_box({
+                let mut virtual_buffer = VirtualBuffer::from_size(100, 100);
+                virtual_buffer.merge_primitive(primitive.clone());
+            });
+        });
+    }
+}
