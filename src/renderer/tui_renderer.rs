@@ -187,45 +187,48 @@ impl Default for TuiRenderer {
     }
 }
 
-// #[cfg(test)]
-// mod tests {
-//     extern crate test;
-//
-//     use super::super::primitives::{Cell, Primitive, Style, VirtualBuffer};
-//     use super::TuiRenderer;
-//     use iced_native::Color;
-//     use test::{black_box, Bencher};
-//
-//     #[bench]
-//     fn bench_render_vbuffer(b: &mut Bencher) {
-//         let mut virtual_buffer = VirtualBuffer::from_size(100, 100);
-//
-//         for x in 0_u8..100_u8 {
-//             for y in 0_u8..25_u8 {
-//                 for add_y in 0_u8..5_u8 {
-//                     virtual_buffer.merge_primitive(Primitive::Cell(
-//                         x as u16,
-//                         (y + add_y) as u16,
-//                         Cell {
-//                             content: Some('a'),
-//                             style: Style {
-//                                 fg_color: Some(Color::from_rgb8(x, x + 10_u8, y + 5_u8)),
-//                                 bg_color: Some(Color::from_rgb8(x, x + 8_u8, y + 7_u8)),
-//                                 is_bold: x % 2 == 0,
-//                             },
-//                         },
-//                     ));
-//                 }
-//             }
-//         }
-//
-//         b.iter(|| {
-//             black_box({
-//                 let virtual_buffer = virtual_buffer.clone();
-//                 let renderer = TuiRenderer::default();
-//                 let mut output: Vec<u8> = vec![];
-//                 renderer.render_vbuffer(virtual_buffer, &mut output);
-//             });
-//         });
-//     }
-// }
+#[cfg(test)]
+mod tests {
+    extern crate test;
+
+    use super::super::primitives::{Cell, Primitive, PrimitiveCell};
+    use super::super::style::Style;
+    use super::super::virtual_buffer::VirtualBuffer;
+    use super::TuiRenderer;
+    use iced_native::Color;
+    use test::{black_box, Bencher};
+
+    #[bench]
+    fn bench_render_vbuffer(b: &mut Bencher) {
+        let mut virtual_buffer = VirtualBuffer::from_size(100, 100);
+
+        let mut primitive_cells = vec![];
+        for x in 0_u8..100_u8 {
+            for y in 0_u8..25_u8 {
+                for add_y in 0_u8..5_u8 {
+                    primitive_cells.push(PrimitiveCell::new(
+                        x as u16,
+                        (y + add_y) as u16,
+                        Cell {
+                            content: Some('a'),
+                            style: Style {
+                                fg_color: Some(Color::from_rgb8(x, x + 10_u8, y + 5_u8)),
+                                bg_color: Some(Color::from_rgb8(x, x + 8_u8, y + 7_u8)),
+                                is_bold: x % 2 == 0,
+                            },
+                        },
+                    ));
+                }
+            }
+        }
+
+        let primitive = Primitive::from_cells(primitive_cells);
+
+        b.iter(|| {
+            let virtual_buffer = virtual_buffer.clone();
+            let renderer = TuiRenderer::default();
+            let mut output: Vec<u8> = vec![];
+            renderer.render_vbuffer(virtual_buffer, &mut output);
+        });
+    }
+}

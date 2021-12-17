@@ -88,10 +88,8 @@ mod tests {
         let primitive = Primitive::merge(primitives);
 
         b.iter(|| {
-            black_box({
-                let mut virtual_buffer = VirtualBuffer::from_size(100, 100);
-                virtual_buffer.merge_primitive(primitive.clone());
-            });
+            let mut virtual_buffer = VirtualBuffer::from_size(100, 100);
+            virtual_buffer.merge_primitive(primitive.clone());
         });
     }
 }
