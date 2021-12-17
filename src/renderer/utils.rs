@@ -1,4 +1,5 @@
-use super::primitives::{Cell, Primitive, Style};
+use super::primitives::{Cell, Primitive, PrimitiveCell};
+use super::style::Style;
 use super::tui_renderer::TuiRenderer;
 use iced_native::layout::Node;
 use iced_native::{
@@ -37,7 +38,7 @@ pub fn draw_list<Message>(
         primitives.push(element.draw(renderer, defaults, elem_layout, cursor_position, viewport));
     }
 
-    Primitive::Group(primitives)
+    Primitive::merge(primitives)
 }
 
 fn round_layout_list(
@@ -172,8 +173,8 @@ pub fn crop_text_to_bounds(
     return_primitives: bool,
     style: Style,
     allow_wrap: bool,
-) -> (Vec<Primitive>, u32, u32) {
-    let mut primitive_cells: Vec<Primitive> = Vec::with_capacity(content.len());
+) -> (Vec<PrimitiveCell>, u32, u32) {
+    let mut primitive_cells: Vec<PrimitiveCell> = Vec::with_capacity(content.len());
     let bounds_width_i = size.map(|s| s.width as u32).unwrap_or(u32::MAX);
     let bounds_height_i = size.map(|s| s.height as u32).unwrap_or(u32::MAX);
     let mut current_x: u16 = start_x;
@@ -206,7 +207,7 @@ pub fn crop_text_to_bounds(
 
         // add char to current row, if inside width bounds
         if return_primitives {
-            primitive_cells.push(Primitive::Cell(
+            primitive_cells.push(PrimitiveCell::new(
                 current_x,
                 current_y,
                 Cell {
@@ -237,7 +238,8 @@ fn is_printable(c: char) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::super::primitives::{Primitive, Style};
+    use super::super::primitives::PrimitiveCell;
+    use super::super::style::Style;
     use super::crop_text_to_bounds;
     use super::{round_layout_list, RoundDirection};
     use iced_native::{
@@ -396,29 +398,29 @@ mod tests {
         assert_eq!(height, 2);
 
         let expected_primitives = vec![
-            Primitive::from_char(10, 10, 'H'),
-            Primitive::from_char(11, 10, 'e'),
-            Primitive::from_char(12, 10, 'l'),
-            Primitive::from_char(13, 10, 'l'),
-            Primitive::from_char(14, 10, 'o'),
-            Primitive::from_char(10, 11, 'P'),
-            Primitive::from_char(11, 11, 'a'),
-            Primitive::from_char(12, 11, 'n'),
+            PrimitiveCell::from_char(10, 10, 'H'),
+            PrimitiveCell::from_char(11, 10, 'e'),
+            PrimitiveCell::from_char(12, 10, 'l'),
+            PrimitiveCell::from_char(13, 10, 'l'),
+            PrimitiveCell::from_char(14, 10, 'o'),
+            PrimitiveCell::from_char(10, 11, 'P'),
+            PrimitiveCell::from_char(11, 11, 'a'),
+            PrimitiveCell::from_char(12, 11, 'n'),
         ];
 
-        for (i, expected_primitive) in expected_primitives.iter().enumerate() {
+        for (i, expected) in expected_primitives.iter().enumerate() {
             assert!(
                 primitives.len() > i,
                 "should have primitive at index {}, ({})",
                 primitives.len(),
-                match expected_primitive {
-                    Primitive::Cell(x, y, cell) => {
-                        format!("x: {}, y: {}, char: {}", x, y, cell.content.unwrap())
-                    }
-                    _ => "".to_string(),
-                }
+                format!(
+                    "x: {}, y: {}, char: {}",
+                    expected.x,
+                    expected.y,
+                    expected.cell.content.unwrap()
+                )
             );
-            assert_eq!(&primitives[i], expected_primitive);
+            assert_eq!(&primitives[i], expected);
         }
 
         assert_eq!(primitives.len(), expected_primitives.len());
@@ -441,33 +443,33 @@ mod tests {
         assert_eq!(height, 4);
 
         let expected_primitives = vec![
-            Primitive::from_char(10, 10, 'H'),
-            Primitive::from_char(11, 10, 'e'),
-            Primitive::from_char(12, 10, 'l'),
-            Primitive::from_char(10, 11, 'P'),
-            Primitive::from_char(11, 11, 'a'),
-            Primitive::from_char(12, 11, 'n'),
-            Primitive::from_char(10, 12, 'L'),
-            Primitive::from_char(11, 12, 'o'),
-            Primitive::from_char(12, 12, 'n'),
-            Primitive::from_char(10, 13, 'I'),
-            Primitive::from_char(11, 13, 'o'),
-            Primitive::from_char(12, 13, 'n'),
+            PrimitiveCell::from_char(10, 10, 'H'),
+            PrimitiveCell::from_char(11, 10, 'e'),
+            PrimitiveCell::from_char(12, 10, 'l'),
+            PrimitiveCell::from_char(10, 11, 'P'),
+            PrimitiveCell::from_char(11, 11, 'a'),
+            PrimitiveCell::from_char(12, 11, 'n'),
+            PrimitiveCell::from_char(10, 12, 'L'),
+            PrimitiveCell::from_char(11, 12, 'o'),
+            PrimitiveCell::from_char(12, 12, 'n'),
+            PrimitiveCell::from_char(10, 13, 'I'),
+            PrimitiveCell::from_char(11, 13, 'o'),
+            PrimitiveCell::from_char(12, 13, 'n'),
         ];
 
-        for (i, expected_primitive) in expected_primitives.iter().enumerate() {
+        for (i, expected) in expected_primitives.iter().enumerate() {
             assert!(
                 primitives.len() > i,
                 "should have primitive at index {}, ({})",
                 primitives.len(),
-                match expected_primitive {
-                    Primitive::Cell(x, y, cell) => {
-                        format!("x: {}, y: {}, char: {}", x, y, cell.content.unwrap())
-                    }
-                    _ => "".to_string(),
-                }
+                format!(
+                    "x: {}, y: {}, char: {}",
+                    expected.x,
+                    expected.y,
+                    expected.cell.content.unwrap()
+                )
             );
-            assert_eq!(&primitives[i], expected_primitive);
+            assert_eq!(&primitives[i], expected);
         }
 
         assert_eq!(primitives.len(), expected_primitives.len());
@@ -490,32 +492,32 @@ mod tests {
         assert_eq!(height, 3);
 
         let expected_primitives = vec![
-            Primitive::from_char(10, 10, 'H'),
-            Primitive::from_char(11, 10, 'e'),
-            Primitive::from_char(12, 10, 'l'),
-            Primitive::from_char(13, 10, 'l'),
-            Primitive::from_char(14, 10, 'o'),
-            Primitive::from_char(10, 11, 'P'),
-            Primitive::from_char(11, 11, 'a'),
-            Primitive::from_char(12, 11, 'n'),
-            Primitive::from_char(10, 12, 'L'),
-            Primitive::from_char(11, 12, 'o'),
-            Primitive::from_char(12, 12, 'n'),
+            PrimitiveCell::from_char(10, 10, 'H'),
+            PrimitiveCell::from_char(11, 10, 'e'),
+            PrimitiveCell::from_char(12, 10, 'l'),
+            PrimitiveCell::from_char(13, 10, 'l'),
+            PrimitiveCell::from_char(14, 10, 'o'),
+            PrimitiveCell::from_char(10, 11, 'P'),
+            PrimitiveCell::from_char(11, 11, 'a'),
+            PrimitiveCell::from_char(12, 11, 'n'),
+            PrimitiveCell::from_char(10, 12, 'L'),
+            PrimitiveCell::from_char(11, 12, 'o'),
+            PrimitiveCell::from_char(12, 12, 'n'),
         ];
 
-        for (i, expected_primitive) in expected_primitives.iter().enumerate() {
+        for (i, expected) in expected_primitives.iter().enumerate() {
             assert!(
                 primitives.len() > i,
                 "should have primitive at index {}, ({})",
                 primitives.len(),
-                match expected_primitive {
-                    Primitive::Cell(x, y, cell) => {
-                        format!("x: {}, y: {}, char: {}", x, y, cell.content.unwrap())
-                    }
-                    _ => "".to_string(),
-                }
+                format!(
+                    "x: {}, y: {}, char: {}",
+                    expected.x,
+                    expected.y,
+                    expected.cell.content.unwrap()
+                )
             );
-            assert_eq!(&primitives[i], expected_primitive);
+            assert_eq!(&primitives[i], expected);
         }
 
         assert_eq!(primitives.len(), expected_primitives.len());
@@ -538,35 +540,35 @@ mod tests {
         assert_eq!(height, 5);
 
         let expected_primitives = vec![
-            Primitive::from_char(10, 10, 'H'),
-            Primitive::from_char(11, 10, 'e'),
-            Primitive::from_char(12, 10, 'l'),
-            Primitive::from_char(10, 11, 'l'),
-            Primitive::from_char(11, 11, 'o'),
-            Primitive::from_char(10, 12, 'P'),
-            Primitive::from_char(11, 12, 'a'),
-            Primitive::from_char(12, 12, 'n'),
-            Primitive::from_char(10, 13, 'L'),
-            Primitive::from_char(11, 13, 'o'),
-            Primitive::from_char(12, 13, 'n'),
-            Primitive::from_char(10, 14, 'I'),
-            Primitive::from_char(11, 14, 'o'),
-            Primitive::from_char(12, 14, 'n'),
+            PrimitiveCell::from_char(10, 10, 'H'),
+            PrimitiveCell::from_char(11, 10, 'e'),
+            PrimitiveCell::from_char(12, 10, 'l'),
+            PrimitiveCell::from_char(10, 11, 'l'),
+            PrimitiveCell::from_char(11, 11, 'o'),
+            PrimitiveCell::from_char(10, 12, 'P'),
+            PrimitiveCell::from_char(11, 12, 'a'),
+            PrimitiveCell::from_char(12, 12, 'n'),
+            PrimitiveCell::from_char(10, 13, 'L'),
+            PrimitiveCell::from_char(11, 13, 'o'),
+            PrimitiveCell::from_char(12, 13, 'n'),
+            PrimitiveCell::from_char(10, 14, 'I'),
+            PrimitiveCell::from_char(11, 14, 'o'),
+            PrimitiveCell::from_char(12, 14, 'n'),
         ];
 
-        for (i, expected_primitive) in expected_primitives.iter().enumerate() {
+        for (i, expected) in expected_primitives.iter().enumerate() {
             assert!(
                 primitives.len() > i,
                 "should have primitive at index {}, ({})",
                 primitives.len(),
-                match expected_primitive {
-                    Primitive::Cell(x, y, cell) => {
-                        format!("x: {}, y: {}, char: {}", x, y, cell.content.unwrap())
-                    }
-                    _ => "".to_string(),
-                }
+                format!(
+                    "x: {}, y: {}, char: {}",
+                    expected.x,
+                    expected.y,
+                    expected.cell.content.unwrap()
+                )
             );
-            assert_eq!(&primitives[i], expected_primitive);
+            assert_eq!(&primitives[i], expected);
         }
 
         assert_eq!(primitives.len(), expected_primitives.len());
@@ -586,35 +588,35 @@ mod tests {
         );
 
         let expected_primitives = vec![
-            Primitive::from_char(10, 10, 'H'),
-            Primitive::from_char(11, 10, 'e'),
-            Primitive::from_char(12, 10, 'l'),
-            Primitive::from_char(10, 11, 'l'),
-            Primitive::from_char(11, 11, 'o'),
-            Primitive::from_char(10, 12, 'P'),
-            Primitive::from_char(11, 12, 'a'),
-            Primitive::from_char(12, 12, 'n'),
-            Primitive::from_char(10, 13, 'L'),
-            Primitive::from_char(11, 13, 'o'),
-            Primitive::from_char(12, 13, 'n'),
-            Primitive::from_char(10, 14, 'I'),
-            Primitive::from_char(11, 14, 'o'),
-            Primitive::from_char(12, 14, 'n'),
+            PrimitiveCell::from_char(10, 10, 'H'),
+            PrimitiveCell::from_char(11, 10, 'e'),
+            PrimitiveCell::from_char(12, 10, 'l'),
+            PrimitiveCell::from_char(10, 11, 'l'),
+            PrimitiveCell::from_char(11, 11, 'o'),
+            PrimitiveCell::from_char(10, 12, 'P'),
+            PrimitiveCell::from_char(11, 12, 'a'),
+            PrimitiveCell::from_char(12, 12, 'n'),
+            PrimitiveCell::from_char(10, 13, 'L'),
+            PrimitiveCell::from_char(11, 13, 'o'),
+            PrimitiveCell::from_char(12, 13, 'n'),
+            PrimitiveCell::from_char(10, 14, 'I'),
+            PrimitiveCell::from_char(11, 14, 'o'),
+            PrimitiveCell::from_char(12, 14, 'n'),
         ];
 
-        for (i, expected_primitive) in expected_primitives.iter().enumerate() {
+        for (i, expected) in expected_primitives.iter().enumerate() {
             assert!(
                 primitives.len() > i,
                 "should have primitive at index {}, ({})",
                 primitives.len(),
-                match expected_primitive {
-                    Primitive::Cell(x, y, cell) => {
-                        format!("x: {}, y: {}, char: {}", x, y, cell.content.unwrap())
-                    }
-                    _ => "".to_string(),
-                }
+                format!(
+                    "x: {}, y: {}, char: {}",
+                    expected.x,
+                    expected.y,
+                    expected.cell.content.unwrap()
+                )
             );
-            assert_eq!(&primitives[i], expected_primitive);
+            assert_eq!(&primitives[i], expected);
         }
 
         assert_eq!(width, 3);
@@ -636,30 +638,30 @@ mod tests {
         );
 
         let expected_primitives = vec![
-            Primitive::from_char(10, 10, 'H'),
-            Primitive::from_char(11, 10, 'e'),
-            Primitive::from_char(12, 10, 'l'),
-            Primitive::from_char(10, 11, 'l'),
-            Primitive::from_char(11, 11, 'o'),
-            Primitive::from_char(12, 11, ' '),
-            Primitive::from_char(10, 12, 'P'),
-            Primitive::from_char(11, 12, 'a'),
-            Primitive::from_char(12, 12, 'n'),
+            PrimitiveCell::from_char(10, 10, 'H'),
+            PrimitiveCell::from_char(11, 10, 'e'),
+            PrimitiveCell::from_char(12, 10, 'l'),
+            PrimitiveCell::from_char(10, 11, 'l'),
+            PrimitiveCell::from_char(11, 11, 'o'),
+            PrimitiveCell::from_char(12, 11, ' '),
+            PrimitiveCell::from_char(10, 12, 'P'),
+            PrimitiveCell::from_char(11, 12, 'a'),
+            PrimitiveCell::from_char(12, 12, 'n'),
         ];
 
-        for (i, expected_primitive) in expected_primitives.iter().enumerate() {
+        for (i, expected) in expected_primitives.iter().enumerate() {
             assert!(
                 primitives.len() > i,
                 "should have primitive at index {}, ({})",
                 primitives.len(),
-                match expected_primitive {
-                    Primitive::Cell(x, y, cell) => {
-                        format!("x: {}, y: {}, char: {}", x, y, cell.content.unwrap())
-                    }
-                    _ => "".to_string(),
-                }
+                format!(
+                    "x: {}, y: {}, char: {}",
+                    expected.x,
+                    expected.y,
+                    expected.cell.content.unwrap()
+                )
             );
-            assert_eq!(&primitives[i], expected_primitive);
+            assert_eq!(&primitives[i], expected);
         }
 
         assert_eq!(width, 3);

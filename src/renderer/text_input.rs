@@ -1,6 +1,8 @@
-use super::primitives::{Cell, CursorStyle, Primitive, Style};
+use super::primitives::{Cell, CursorPosition, Primitive, PrimitiveCell};
 use super::tui_renderer::TuiRenderer;
 use super::utils::crop_text_to_bounds;
+use crate::CursorStyle;
+use crate::Style;
 use iced_native::text_input;
 
 #[derive(Debug, Clone, Copy)]
@@ -119,15 +121,15 @@ impl text_input::Renderer for TuiRenderer {
         let text_bounds_width = text_bounds.width.round() as u16;
 
         let main_style = style.normal.try_merge(if state.is_focused() {
-            Some(&style.focused)
+            Some(style.focused)
         } else if bounds.contains(cursor_position) {
-            Some(&style.hover)
+            Some(style.hover)
         } else {
             None
         });
 
         let text_style = if rendered_is_placeholder {
-            main_style.merge(&style.placeholder)
+            main_style.merge(style.placeholder)
         } else {
             main_style.clone()
         };
@@ -147,10 +149,10 @@ impl text_input::Renderer for TuiRenderer {
 
         for index in 0..text_bounds_width {
             let primitive = match parsed_primitives_drain.next() {
-                Some(Primitive::Cell(_, _, cell)) => {
-                    Primitive::Cell(start_x + index, start_y, cell)
+                Some(PrimitiveCell { x: _, y: _, cell }) => {
+                    PrimitiveCell::new(start_x + index, start_y, cell)
                 }
-                _ => Primitive::Cell(
+                _ => PrimitiveCell::new(
                     start_x + index,
                     start_y,
                     Cell {
@@ -163,27 +165,30 @@ impl text_input::Renderer for TuiRenderer {
             result_primitives.push(primitive);
         }
 
-        if state.is_focused() {
+        let cursor_position = if state.is_focused() {
             let cursor_state = state.cursor().state(value);
 
             match cursor_state {
-                text_input::cursor::State::Index(cursor_index) => {
-                    result_primitives.push(Primitive::CursorPosition(
-                        start_x + (cursor_index as u16) - offset as u16,
-                        start_y,
-                        style.cursor,
-                    ))
-                }
+                text_input::cursor::State::Index(cursor_index) => Some(CursorPosition::new(
+                    start_x + (cursor_index as u16) - offset as u16,
+                    start_y,
+                    style.cursor,
+                )),
                 text_input::cursor::State::Selection { start: _, end } => {
-                    result_primitives.push(Primitive::CursorPosition(
+                    Some(CursorPosition::new(
                         start_x + (end as u16) - offset as u16,
                         start_y,
                         style.cursor,
                     ))
                 }
-            };
-        }
+            }
+        } else {
+            None
+        };
 
-        Primitive::Group(result_primitives)
+        let mut result = Primitive::from_cells(result_primitives);
+        result.cursor_position = cursor_position;
+
+        result
     }
 }

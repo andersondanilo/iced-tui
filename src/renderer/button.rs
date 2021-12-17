@@ -1,6 +1,7 @@
-use super::primitives::{Cell, Primitive, Style};
+use super::primitives::{Cell, Primitive};
 use super::tui_renderer::TuiRenderer;
 use super::utils::round_individual_layout;
+use crate::Style;
 use iced_native::button;
 use iced_native::Layout;
 
@@ -72,16 +73,16 @@ impl button::Renderer for TuiRenderer {
             content.draw(self, defaults, new_elem_layout, cursor_position, &bounds);
 
         let selected_style = button_style.normal.try_merge(if is_disabled {
-            Some(&button_style.disabled)
+            Some(button_style.disabled)
         } else if is_pressed {
-            Some(&button_style.pressed)
+            Some(button_style.pressed)
         } else if bounds.contains(cursor_position) {
-            Some(&button_style.hover)
+            Some(button_style.hover)
         } else {
             None
         });
 
-        let rectangle = Primitive::Rectangle(
+        let rectangle = Primitive::rectangle(
             bounds.x.round() as u16,
             bounds.y.round() as u16,
             bounds.width.round() as u16,
@@ -92,6 +93,6 @@ impl button::Renderer for TuiRenderer {
             },
         );
 
-        Primitive::Group(vec![rectangle, content_primitive])
+        Primitive::merge(vec![rectangle, content_primitive])
     }
 }

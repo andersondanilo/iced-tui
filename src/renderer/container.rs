@@ -1,6 +1,7 @@
-use super::primitives::{Cell, Primitive, Style};
+use super::primitives::{Cell, Primitive};
 use super::tui_renderer::TuiRenderer;
 use crate::renderer::utils::round_individual_layout;
+use crate::Style;
 use iced_native::{container, Element, Layout, Point, Rectangle};
 
 impl container::Renderer for TuiRenderer {
@@ -23,7 +24,7 @@ impl container::Renderer for TuiRenderer {
         let content_primitive =
             content.draw(self, defaults, new_elem_layout, cursor_position, viewport);
 
-        let rectangle = Primitive::Rectangle(
+        let rectangle = Primitive::rectangle(
             container_bounds.x.round() as u16,
             container_bounds.y.round() as u16,
             container_bounds.width.round() as u16,
@@ -34,6 +35,6 @@ impl container::Renderer for TuiRenderer {
             },
         );
 
-        Primitive::Group(vec![rectangle, content_primitive])
+        Primitive::merge(vec![rectangle, content_primitive])
     }
 }

@@ -1,6 +1,7 @@
-use super::primitives::{Primitive, Style};
+use super::primitives::Primitive;
 use super::tui_renderer::TuiRenderer;
 use super::utils::crop_text_to_bounds;
+use crate::Style;
 use iced_native::{text, Color, HorizontalAlignment, Rectangle, Renderer, VerticalAlignment};
 
 impl text::Renderer for TuiRenderer {
@@ -56,6 +57,6 @@ impl text::Renderer for TuiRenderer {
             style,
             true,
         );
-        Primitive::Group(primitive_cells)
+        Primitive::from_cells(primitive_cells)
     }
 }

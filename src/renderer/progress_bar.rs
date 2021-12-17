@@ -1,5 +1,6 @@
-use super::primitives::{Cell, Primitive, Style};
+use super::primitives::{Cell, Primitive};
 use super::tui_renderer::TuiRenderer;
+use crate::Style;
 use iced_native::progress_bar;
 use iced_native::Color;
 
@@ -56,15 +57,15 @@ impl progress_bar::Renderer for TuiRenderer {
         let progress_ratio = value / range_length;
         let progress_width = (bounds.width * progress_ratio).round() as u16;
 
-        Primitive::Group(vec![
-            Primitive::Rectangle(
+        Primitive::merge(vec![
+            Primitive::rectangle(
                 bounds.x.round() as u16,
                 bounds.y.round() as u16,
                 progress_width,
                 bounds.height as u16,
                 Cell::from_char(' ').style(progress_style.loaded_style),
             ),
-            Primitive::Rectangle(
+            Primitive::rectangle(
                 bounds.x.round() as u16 + progress_width,
                 bounds.y.round() as u16,
                 (bounds.width.round() as u16 - progress_width).max(0),
