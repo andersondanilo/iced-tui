@@ -48,7 +48,7 @@ mod tests {
     use super::super::style::Style;
     use super::VirtualBuffer;
     use iced_native::Color;
-    use test::{black_box, Bencher};
+    use test::Bencher;
 
     #[bench]
     fn bench_merge_primitive(b: &mut Bencher) {

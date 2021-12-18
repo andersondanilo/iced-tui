@@ -186,9 +186,7 @@ pub trait Application {
                     UserInterface::build(view_result, size, cache.take().unwrap(), &mut renderer);
                 let primitive = ui.draw(&mut renderer, cursor_position);
 
-                if let Some(vbuffer) = renderer.render(&mut stdout, primitive, &last_vbuffer) {
-                    last_vbuffer = Some(vbuffer);
-                }
+                last_vbuffer = Some(renderer.render(&mut stdout, primitive, &last_vbuffer));
 
                 let (messages, event_statuses, events, ui_updated) = match current_ui_message {
                     Some(ui_message) => {

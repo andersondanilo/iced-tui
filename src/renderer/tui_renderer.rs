@@ -31,24 +31,25 @@ impl TuiRenderer {
         vbuffer
     }
 
-    pub fn render(
-        &mut self,
-        stdout: &mut std::io::Stdout,
+    pub fn render<O>(
+        &self,
+        output: &mut O,
         primitive: Primitive,
         last_vbuffer: &Option<VirtualBuffer>,
-    ) -> Option<VirtualBuffer> {
+    ) -> VirtualBuffer
+    where
+        O: std::io::Write,
+    {
         let vbuffer = self.make_vbuffer(primitive);
-
-        //if let Some(last_vbuffer) = last_vbuffer {
-        //    if vbuffer.hash == last_vbuffer.hash {
-        //        return None;
-        //    }
-        //}
-
-        Some(self.render_vbuffer(vbuffer, stdout))
+        self.render_vbuffer(output, vbuffer, last_vbuffer)
     }
 
-    fn render_vbuffer<O>(&self, vbuffer: VirtualBuffer, output: &mut O) -> VirtualBuffer
+    pub fn render_vbuffer<O>(
+        &self,
+        output: &mut O,
+        vbuffer: VirtualBuffer,
+        last_vbuffer: &Option<VirtualBuffer>,
+    ) -> VirtualBuffer
     where
         O: std::io::Write,
     {
@@ -194,12 +195,11 @@ mod tests {
     use super::super::primitives::{Cell, Primitive, PrimitiveCell};
     use super::super::style::Style;
     use super::super::virtual_buffer::VirtualBuffer;
-    use super::TuiRenderer;
+    use super::*;
     use iced_native::Color;
-    use test::{black_box, Bencher};
+    use test::Bencher;
 
-    #[bench]
-    fn bench_render_vbuffer(b: &mut Bencher) {
+    fn make_example_vbuffer() -> VirtualBuffer {
         let mut virtual_buffer = VirtualBuffer::from_size(100, 100);
 
         let mut primitive_cells = vec![];
@@ -223,12 +223,38 @@ mod tests {
         }
 
         let primitive = Primitive::from_cells(primitive_cells);
+        virtual_buffer.merge_primitive(primitive);
+        virtual_buffer
+    }
+
+    #[bench]
+    fn bench_clone_vbuffer(b: &mut Bencher) {
+        let vbuffer = make_example_vbuffer();
+        b.iter(|| vbuffer.clone())
+    }
+
+    #[bench]
+    fn bench_split_rows_by_style(b: &mut Bencher) {
+        let vbuffer = make_example_vbuffer();
+        b.iter(|| {
+            let lines: Vec<Vec<(Style, String)>> = vbuffer
+                .clone()
+                .rows
+                .iter()
+                .map(|row| split_by_style(row))
+                .collect();
+        })
+    }
+
+    #[bench]
+    fn bench_first_render(b: &mut Bencher) {
+        let virtual_buffer = make_example_vbuffer();
 
         b.iter(|| {
             let virtual_buffer = virtual_buffer.clone();
             let renderer = TuiRenderer::default();
             let mut output: Vec<u8> = vec![];
-            renderer.render_vbuffer(virtual_buffer, &mut output);
+            renderer.render_vbuffer(&mut output, virtual_buffer, &None);
         });
     }
 }
