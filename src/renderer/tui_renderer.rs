@@ -234,7 +234,16 @@ mod tests {
     }
 
     #[bench]
-    fn bench_split_rows_by_style(b: &mut Bencher) {
+    fn bench_split_rows_by_style_one_line(b: &mut Bencher) {
+        let vbuffer = make_example_vbuffer();
+        b.iter(|| {
+            let row = &vbuffer.rows[0].clone();
+            split_by_style(&row)
+        })
+    }
+
+    #[bench]
+    fn bench_split_rows_by_style_multiple(b: &mut Bencher) {
         let vbuffer = make_example_vbuffer();
         b.iter(|| {
             let lines: Vec<Vec<(Style, String)>> = vbuffer

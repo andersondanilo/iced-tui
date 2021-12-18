@@ -67,7 +67,7 @@ impl Style {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum CursorShape {
     UnderScore,
     Line,
@@ -80,7 +80,7 @@ impl Default for CursorShape {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct CursorStyle {
     pub(crate) shape: CursorShape,
     pub(crate) blinking: bool,

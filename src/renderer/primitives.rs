@@ -2,7 +2,7 @@ use super::style::{CursorStyle, Style};
 use core::fmt::Debug;
 use std::collections::BTreeMap;
 
-#[derive(Clone)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct CursorPosition {
     pub(crate) x: u16,
     pub(crate) y: u16,
@@ -15,7 +15,7 @@ impl CursorPosition {
     }
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct PrimitiveCell {
     pub(crate) x: u16,
     pub(crate) y: u16,
@@ -36,7 +36,7 @@ impl PrimitiveCell {
     }
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Primitive {
     pub(crate) cells: BTreeMap<(u16, u16), Cell>,
     pub(crate) cursor_position: Option<CursorPosition>,
@@ -102,7 +102,7 @@ impl Primitive {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Cell {
     pub content: Option<char>,
     pub style: Style,
