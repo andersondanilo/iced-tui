@@ -53,14 +53,35 @@ impl TuiRenderer {
     where
         O: std::io::Write,
     {
-        queue!(output, crossterm::style::ResetColor, cursor::Hide,).unwrap();
+        queue!(output, crossterm::style::ResetColor).unwrap();
 
-        let splited_rows = vbuffer.rows.iter().map(|row| split_by_style(row));
+        let diff_rows: Vec<(usize, &Vec<Cell>)> = if let Some(last_vbuffer) = last_vbuffer {
+            vbuffer
+                .rows
+                .iter()
+                .enumerate()
+                .filter_map(|(i, cells)| {
+                    let old_cells = last_vbuffer.rows.get(i);
 
-        for (i, results_by_style) in splited_rows.enumerate() {
+                    if let Some(old_cells) = old_cells {
+                        if old_cells == cells {
+                            return None;
+                        }
+                    }
+
+                    Some((i, cells))
+                })
+                .collect()
+        } else {
+            vbuffer.rows.iter().enumerate().into_iter().collect()
+        };
+
+        let splited_rows = diff_rows.iter().map(|(i, row)| (i, split_by_style(row)));
+
+        for (i, results_by_style) in splited_rows {
             queue!(
                 output,
-                cursor::MoveTo(0, i as u16),
+                cursor::MoveTo(0, *i as u16),
                 //terminal::Clear(terminal::ClearType::CurrentLine),
             )
             .unwrap();
@@ -113,28 +134,36 @@ impl TuiRenderer {
             }
         }
 
-        match vbuffer.cursor_position {
-            Some(CursorPosition { x, y, style }) => {
-                queue!(
-                    output,
-                    cursor::Show,
-                    cursor::MoveTo(x, y),
-                    cursor::SetCursorShape(match style.shape {
-                        CursorShape::Line => cursor::CursorShape::Line,
-                        CursorShape::Block => cursor::CursorShape::Block,
-                        CursorShape::UnderScore => cursor::CursorShape::UnderScore,
-                    }),
-                )
-                .unwrap();
+        let is_same_cursor_position = if let Some(last_vbuffer) = last_vbuffer {
+            last_vbuffer.cursor_position == vbuffer.cursor_position
+        } else {
+            false
+        };
 
-                if style.blinking {
-                    queue!(output, cursor::EnableBlinking).unwrap();
-                } else {
-                    queue!(output, cursor::DisableBlinking).unwrap();
+        if !is_same_cursor_position {
+            match vbuffer.cursor_position {
+                Some(CursorPosition { x, y, style }) => {
+                    queue!(
+                        output,
+                        cursor::Show,
+                        cursor::MoveTo(x, y),
+                        cursor::SetCursorShape(match style.shape {
+                            CursorShape::Line => cursor::CursorShape::Line,
+                            CursorShape::Block => cursor::CursorShape::Block,
+                            CursorShape::UnderScore => cursor::CursorShape::UnderScore,
+                        }),
+                    )
+                    .unwrap();
+
+                    if style.blinking {
+                        queue!(output, cursor::EnableBlinking).unwrap();
+                    } else {
+                        queue!(output, cursor::DisableBlinking).unwrap();
+                    }
                 }
-            }
-            None => {
-                queue!(output, cursor::MoveTo(0, 0), cursor::Hide).unwrap();
+                None => {
+                    queue!(output, cursor::MoveTo(0, 0), cursor::Hide).unwrap();
+                }
             }
         }
 
@@ -246,7 +275,7 @@ mod tests {
     fn bench_split_rows_by_style_multiple(b: &mut Bencher) {
         let vbuffer = make_example_vbuffer();
         b.iter(|| {
-            let lines: Vec<Vec<(Style, String)>> = vbuffer
+            let _lines: Vec<Vec<(Style, String)>> = vbuffer
                 .clone()
                 .rows
                 .iter()
@@ -256,7 +285,7 @@ mod tests {
     }
 
     #[bench]
-    fn bench_first_render(b: &mut Bencher) {
+    fn bench_render_first(b: &mut Bencher) {
         let virtual_buffer = make_example_vbuffer();
 
         b.iter(|| {
@@ -264,6 +293,22 @@ mod tests {
             let renderer = TuiRenderer::default();
             let mut output: Vec<u8> = vec![];
             renderer.render_vbuffer(&mut output, virtual_buffer, &None);
+        });
+    }
+
+    #[bench]
+    fn bench_render_diff_one_line(b: &mut Bencher) {
+        let last_virtual_buffer = make_example_vbuffer();
+        let mut virtual_buffer = last_virtual_buffer.clone();
+        virtual_buffer.merge_primitive(Primitive::rectangle(3, 5, 10, 1, Cell::from_char('Z')));
+        virtual_buffer.merge_primitive(Primitive::rectangle(40, 5, 10, 1, Cell::from_char('Z')));
+
+        b.iter(|| {
+            let virtual_buffer = virtual_buffer.clone();
+            let last_virtual_buffer = last_virtual_buffer.clone();
+            let renderer = TuiRenderer::default();
+            let mut output: Vec<u8> = vec![];
+            renderer.render_vbuffer(&mut output, virtual_buffer, &Some(last_virtual_buffer));
         });
     }
 }
