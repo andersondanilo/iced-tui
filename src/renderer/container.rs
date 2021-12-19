@@ -24,7 +24,7 @@ impl container::Renderer for TuiRenderer {
         let content_primitive =
             content.draw(self, defaults, new_elem_layout, cursor_position, viewport);
 
-        let rectangle = Primitive::rectangle(
+        let rectangle = Primitive::Rectangle(
             container_bounds.x.round() as u16,
             container_bounds.y.round() as u16,
             container_bounds.width.round() as u16,
@@ -35,6 +35,6 @@ impl container::Renderer for TuiRenderer {
             },
         );
 
-        Primitive::merge(vec![rectangle, content_primitive])
+        Primitive::Group(vec![rectangle, content_primitive])
     }
 }

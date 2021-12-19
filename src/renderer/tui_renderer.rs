@@ -1,5 +1,5 @@
 use super::colors::get_crossterm_color;
-use super::primitives::{Cell, CursorPosition, Primitive};
+use super::primitives::{Cell, Primitive};
 use super::style::{CursorShape, Style};
 use super::virtual_buffer::VirtualBuffer;
 use crossterm::{cursor, execute, queue, terminal};
@@ -24,17 +24,17 @@ impl TuiRenderer {
         execute!(stdout, crossterm::style::ResetColor, cursor::Show).unwrap();
     }
 
-    fn make_vbuffer(&self, primitive: Primitive) -> VirtualBuffer {
+    fn make_vbuffer(&self, primitive: &Primitive) -> VirtualBuffer {
         let (width, height) = terminal::size().unwrap();
         let mut vbuffer = VirtualBuffer::from_size(width, height);
-        vbuffer.merge_primitive(primitive);
+        vbuffer.merge_primitive(&primitive);
         vbuffer
     }
 
     pub fn render<O>(
         &self,
         output: &mut O,
-        primitive: Primitive,
+        primitive: &Primitive,
         last_vbuffer: &Option<VirtualBuffer>,
         force_render_all: bool,
     ) -> VirtualBuffer
@@ -42,6 +42,7 @@ impl TuiRenderer {
         O: std::io::Write,
     {
         let vbuffer = self.make_vbuffer(primitive);
+
         self.render_vbuffer(
             output,
             vbuffer,
@@ -153,7 +154,7 @@ impl TuiRenderer {
 
         if !is_same_cursor_position {
             match vbuffer.cursor_position {
-                Some(CursorPosition { x, y, style }) => {
+                Some((x, y, style)) => {
                     queue!(
                         output,
                         cursor::Show,
@@ -232,28 +233,26 @@ impl Default for TuiRenderer {
 mod tests {
     extern crate test;
 
-    use super::super::primitives::{Cell, Primitive, PrimitiveCell};
+    use super::super::colors::TermColor;
+    use super::super::primitives::{Cell, Primitive};
     use super::super::style::Style;
     use super::super::virtual_buffer::VirtualBuffer;
     use super::*;
-    use iced_native::Color;
     use test::Bencher;
 
-    fn make_example_vbuffer() -> VirtualBuffer {
-        let mut virtual_buffer = VirtualBuffer::from_size(100, 100);
-
+    fn make_example_primitive() -> Primitive {
         let mut primitive_cells = vec![];
         for x in 0_u8..100_u8 {
             for y in 0_u8..25_u8 {
                 for add_y in 0_u8..5_u8 {
-                    primitive_cells.push(PrimitiveCell::new(
+                    primitive_cells.push(Primitive::Cell(
                         x as u16,
                         (y + add_y) as u16,
                         Cell {
                             content: Some('a'),
                             style: Style {
-                                fg_color: Some(Color::from_rgb8(x, x + 10_u8, y + 5_u8)),
-                                bg_color: Some(Color::from_rgb8(x, x + 8_u8, y + 7_u8)),
+                                fg_color: Some(TermColor::Rgb(x, x + 10_u8, y + 5_u8)),
+                                bg_color: Some(TermColor::Rgb(x, x + 8_u8, y + 7_u8)),
                                 is_bold: x % 2 == 0,
                             },
                         },
@@ -262,8 +261,12 @@ mod tests {
             }
         }
 
-        let primitive = Primitive::from_cells(primitive_cells);
-        virtual_buffer.merge_primitive(primitive);
+        Primitive::Group(primitive_cells)
+    }
+
+    fn make_example_vbuffer() -> VirtualBuffer {
+        let mut virtual_buffer = VirtualBuffer::from_size(100, 100);
+        virtual_buffer.merge_primitive(&make_example_primitive());
         virtual_buffer
     }
 
@@ -296,7 +299,7 @@ mod tests {
     }
 
     #[bench]
-    fn bench_render_first(b: &mut Bencher) {
+    fn bench_render_vbuffer_first(b: &mut Bencher) {
         let virtual_buffer = make_example_vbuffer();
 
         b.iter(|| {
@@ -308,11 +311,11 @@ mod tests {
     }
 
     #[bench]
-    fn bench_render_diff_one_line(b: &mut Bencher) {
+    fn bench_render_vbuffer_diff_one_line(b: &mut Bencher) {
         let last_virtual_buffer = make_example_vbuffer();
         let mut virtual_buffer = last_virtual_buffer.clone();
-        virtual_buffer.merge_primitive(Primitive::rectangle(3, 5, 10, 1, Cell::from_char('Z')));
-        virtual_buffer.merge_primitive(Primitive::rectangle(40, 5, 10, 1, Cell::from_char('Z')));
+        virtual_buffer.merge_primitive(&Primitive::Rectangle(3, 5, 10, 1, Cell::from_char('Z')));
+        virtual_buffer.merge_primitive(&Primitive::Rectangle(40, 5, 10, 1, Cell::from_char('Z')));
 
         b.iter(|| {
             let virtual_buffer = virtual_buffer.clone();
@@ -320,6 +323,52 @@ mod tests {
             let renderer = TuiRenderer::default();
             let mut output: Vec<u8> = vec![];
             renderer.render_vbuffer(&mut output, virtual_buffer, &Some(last_virtual_buffer));
+        });
+    }
+
+    #[bench]
+    fn bench_render_first(b: &mut Bencher) {
+        let primitive = make_example_primitive();
+
+        b.iter(|| {
+            let renderer = TuiRenderer::default();
+            let mut output: Vec<u8> = vec![];
+            renderer.render(&mut output, &primitive, &None, false);
+        });
+    }
+
+    #[bench]
+    fn bench_make_vbuffer(b: &mut Bencher) {
+        let primitive = make_example_primitive();
+
+        b.iter(|| {
+            let renderer = TuiRenderer::default();
+            renderer.make_vbuffer(&primitive);
+        });
+    }
+
+    #[bench]
+    fn bench_render_diff_one_line(b: &mut Bencher) {
+        let renderer = TuiRenderer::default();
+        let primitive = make_example_primitive();
+        let mut last_virtual_buffer = renderer.make_vbuffer(&primitive);
+        last_virtual_buffer.merge_primitive(&Primitive::Rectangle(
+            3,
+            5,
+            10,
+            1,
+            Cell::from_char('Z'),
+        ));
+
+        b.iter(|| {
+            let renderer = TuiRenderer::default();
+            let mut output: Vec<u8> = vec![];
+            renderer.render(
+                &mut output,
+                &primitive,
+                &Some(last_virtual_buffer.clone()),
+                false,
+            );
         });
     }
 }

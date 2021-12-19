@@ -29,6 +29,7 @@ impl scrollable::Renderer for TuiRenderer {
         _style: &<Self as iced_native::scrollable::Renderer>::Style,
         content: <Self as iced_native::Renderer>::Output,
     ) -> <Self as iced_native::Renderer>::Output {
-        content.cut_to_offset(offset as u16, bounds.height.round() as u16)
+        content
+        //content.cut_to_offset(offset as u16, bounds.height.round() as u16)
     }
 }

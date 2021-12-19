@@ -42,10 +42,11 @@ impl text::Renderer for TuiRenderer {
         _horizontal_alignment: HorizontalAlignment,
         _vertical_alignment: VerticalAlignment,
     ) -> <Self as Renderer>::Output {
-        let style = Style {
-            fg_color: color.or(font.fg_color),
-            ..font
-        };
+        let style = font;
+
+        if let Some(color) = color {
+            style.fg(color);
+        }
 
         let (primitive_cells, _width, _height) = crop_text_to_bounds(
             content,
@@ -57,6 +58,6 @@ impl text::Renderer for TuiRenderer {
             style,
             true,
         );
-        Primitive::from_cells(primitive_cells)
+        Primitive::Group(primitive_cells)
     }
 }

@@ -1,4 +1,4 @@
-use super::primitives::{Cell, CursorPosition, Primitive, PrimitiveCell};
+use super::primitives::{Cell, Primitive};
 use super::tui_renderer::TuiRenderer;
 use super::utils::crop_text_to_bounds;
 use crate::CursorStyle;
@@ -149,10 +149,10 @@ impl text_input::Renderer for TuiRenderer {
 
         for index in 0..text_bounds_width {
             let primitive = match parsed_primitives_drain.next() {
-                Some(PrimitiveCell { x: _, y: _, cell }) => {
-                    PrimitiveCell::new(start_x + index, start_y, cell)
+                Some(Primitive::Cell(_, _, cell)) => {
+                    Primitive::Cell(start_x + index, start_y, cell)
                 }
-                _ => PrimitiveCell::new(
+                _ => Primitive::Cell(
                     start_x + index,
                     start_y,
                     Cell {
@@ -165,30 +165,27 @@ impl text_input::Renderer for TuiRenderer {
             result_primitives.push(primitive);
         }
 
-        let cursor_position = if state.is_focused() {
+        if state.is_focused() {
             let cursor_state = state.cursor().state(value);
 
             match cursor_state {
-                text_input::cursor::State::Index(cursor_index) => Some(CursorPosition::new(
-                    start_x + (cursor_index as u16) - offset as u16,
-                    start_y,
-                    style.cursor,
-                )),
+                text_input::cursor::State::Index(cursor_index) => {
+                    result_primitives.push(Primitive::CursorPosition(
+                        start_x + (cursor_index as u16) - offset as u16,
+                        start_y,
+                        style.cursor,
+                    ))
+                }
                 text_input::cursor::State::Selection { start: _, end } => {
-                    Some(CursorPosition::new(
+                    result_primitives.push(Primitive::CursorPosition(
                         start_x + (end as u16) - offset as u16,
                         start_y,
                         style.cursor,
                     ))
                 }
-            }
-        } else {
-            None
-        };
+            };
+        }
 
-        let mut result = Primitive::from_cells(result_primitives);
-        result.cursor_position = cursor_position;
-
-        result
+        Primitive::Group(result_primitives)
     }
 }

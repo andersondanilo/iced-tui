@@ -82,7 +82,7 @@ impl button::Renderer for TuiRenderer {
             None
         });
 
-        let rectangle = Primitive::rectangle(
+        let rectangle = Primitive::Rectangle(
             bounds.x.round() as u16,
             bounds.y.round() as u16,
             bounds.width.round() as u16,
@@ -93,6 +93,6 @@ impl button::Renderer for TuiRenderer {
             },
         );
 
-        Primitive::merge(vec![rectangle, content_primitive])
+        Primitive::Group(vec![rectangle, content_primitive])
     }
 }

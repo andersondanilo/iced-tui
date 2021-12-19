@@ -208,7 +208,7 @@ pub trait Application {
 
                 let before_render = Instant::now();
                 last_vbuffer =
-                    Some(renderer.render(&mut stdout, primitive, &last_vbuffer, force_render_all));
+                    Some(renderer.render(&mut stdout, &primitive, &last_vbuffer, force_render_all));
                 eprintln!("render took {:?}ns", before_render.elapsed().as_nanos());
 
                 let (messages, event_statuses, events, ui_updated) = match current_ui_message {

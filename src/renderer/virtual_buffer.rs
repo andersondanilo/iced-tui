@@ -1,4 +1,5 @@
-use super::primitives::{Cell, CursorPosition, Primitive};
+use super::primitives::{Cell, Primitive};
+use crate::CursorStyle;
 
 #[derive(Clone)]
 pub struct VirtualBuffer {
@@ -6,7 +7,7 @@ pub struct VirtualBuffer {
     pub height: u16,
     pub rows: Vec<Vec<Cell>>,
     pub hash: u64,
-    pub cursor_position: Option<CursorPosition>,
+    pub cursor_position: Option<(u16, u16, CursorStyle)>,
 }
 
 impl VirtualBuffer {
@@ -29,14 +30,33 @@ impl VirtualBuffer {
         }
     }
 
-    pub fn merge_primitive(&mut self, primitive: Primitive) {
-        for ((x, y), cell) in primitive.cells.into_iter() {
-            if x < self.width && y < self.height {
-                self.rows[y as usize][x as usize] = cell;
+    pub fn merge_primitive(&mut self, primitive: &Primitive) {
+        match primitive {
+            Primitive::Group(primitives) => {
+                for primitive in primitives {
+                    self.merge_primitive(primitive);
+                }
             }
-        }
-
-        self.cursor_position = primitive.cursor_position
+            Primitive::Rectangle(start_x, start_y, width, height, fill_cell) => {
+                if !fill_cell.is_empty() {
+                    for x in *start_x..(*start_x + width) {
+                        for y in *start_y..(*start_y + height) {
+                            if x < self.width && y < self.height {
+                                self.rows[y as usize][x as usize].merge(*fill_cell);
+                            }
+                        }
+                    }
+                }
+            }
+            Primitive::Cell(x, y, cell) => {
+                if *x < self.width && *y < self.height {
+                    self.rows[*y as usize][*x as usize].merge(*cell);
+                }
+            }
+            Primitive::CursorPosition(x, y, style) => {
+                self.cursor_position = Some((*x, *y, style.clone()))
+            }
+        };
     }
 }
 
@@ -44,52 +64,73 @@ impl VirtualBuffer {
 mod tests {
     extern crate test;
 
-    use super::super::primitives::{Cell, Primitive, PrimitiveCell};
+    use super::super::colors::TermColor;
+    use super::super::primitives::{Cell, Primitive};
     use super::super::style::Style;
     use super::VirtualBuffer;
-    use iced_native::Color;
     use test::Bencher;
 
-    #[bench]
-    fn bench_merge_primitive(b: &mut Bencher) {
-        let mut primitives = vec![];
-
+    fn make_example_primitive() -> Primitive {
+        let mut primitive_cells = vec![];
         for x in 0_u8..100_u8 {
-            let mut primitives_group = vec![];
-
             for y in 0_u8..25_u8 {
-                primitives_group.push(PrimitiveCell::new(
-                    x as u16,
-                    (y * 4) as u16,
-                    Cell {
-                        content: Some('a'),
-                        style: Style {
-                            fg_color: Some(Color::from_rgb8(x, x + 10_u8, x + 5_u8)),
-                            bg_color: Some(Color::from_rgb8(x, x + 8_u8, x + 7_u8)),
-                            is_bold: true,
+                for add_y in 0_u8..5_u8 {
+                    primitive_cells.push(Primitive::Cell(
+                        x as u16,
+                        (y + add_y) as u16,
+                        Cell {
+                            content: Some('a'),
+                            style: Style {
+                                fg_color: Some(TermColor::Rgb(x, x + 10_u8, y + 5_u8)),
+                                bg_color: Some(TermColor::Rgb(x, x + 8_u8, y + 7_u8)),
+                                is_bold: x % 2 == 0,
+                            },
                         },
-                    },
-                ));
-            }
-
-            primitives.push(Primitive::from_cells(primitives_group));
-
-            if x < 90_u8 {
-                primitives.push(Primitive::rectangle(
-                    x as u16,
-                    (100 - x) as u16,
-                    10 as u16,
-                    10 as u16,
-                    Cell::from_char('a'),
-                ));
+                    ));
+                }
             }
         }
 
-        let primitive = Primitive::merge(primitives);
+        Primitive::Group(primitive_cells)
+    }
+
+    #[bench]
+    fn bench_merge_primitive(b: &mut Bencher) {
+        let primitive = make_example_primitive();
+
+        let mut virtual_buffer = VirtualBuffer::from_size(100, 100);
 
         b.iter(|| {
-            let mut virtual_buffer = VirtualBuffer::from_size(100, 100);
-            virtual_buffer.merge_primitive(primitive.clone());
+            virtual_buffer.merge_primitive(&primitive);
+        });
+    }
+
+    #[bench]
+    fn bench_cell_merge(b: &mut Bencher) {
+        let cell_a = Cell::from_char('A');
+        let cell_b = Cell::from_char('B');
+        let cell_c = Cell::from_char('C');
+        let cell_d = Cell::from_char('D');
+
+        b.iter(|| {
+            let mut cell_vec: Vec<Cell> = vec![
+                cell_a.clone(),
+                cell_b.clone(),
+                cell_c.clone(),
+                cell_d.clone(),
+                cell_a.clone(),
+                cell_b.clone(),
+                cell_c.clone(),
+                cell_d.clone(),
+                cell_a.clone(),
+                cell_b.clone(),
+                cell_c.clone(),
+                cell_d.clone(),
+            ];
+
+            for cell in cell_vec.iter_mut() {
+                cell.merge(cell_a);
+            }
         });
     }
 }
