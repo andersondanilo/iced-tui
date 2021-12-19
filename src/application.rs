@@ -22,15 +22,18 @@ use iced_native::Executor;
 use iced_native::Subscription;
 use iced_native::UserInterface;
 use iced_native::{Cache, Element};
+use std::fmt::Debug;
 use std::rc::Rc;
+use std::sync::atomic::AtomicBool;
 use std::sync::atomic::AtomicU16;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::time::Duration;
+use std::time::Instant;
 
 pub trait Application {
     type Executor: Executor;
-    type Message: Send + Clone;
+    type Message: Send + Clone + Debug;
 
     /// Initializes the Sanbox
     ///
@@ -176,17 +179,37 @@ pub trait Application {
                     y: (&last_mouse_position.1.load(Ordering::Relaxed)).clone() as f32,
                 };
 
-                //log::debug!(target: LOG_TARGET, "received message");
+                eprintln!("received message {:?}", current_ui_message);
+
+                eprintln!("has cache {:?}", cache.is_some());
 
                 // render and return messages
                 let mut app_bmut = application.borrow_mut();
                 let view_result = app_bmut.view();
 
+                let before_build = Instant::now();
                 let mut ui =
                     UserInterface::build(view_result, size, cache.take().unwrap(), &mut renderer);
-                let primitive = ui.draw(&mut renderer, cursor_position);
+                eprintln!("build ui took {:?}ns", before_build.elapsed().as_nanos());
 
-                last_vbuffer = Some(renderer.render(&mut stdout, primitive, &last_vbuffer));
+                let before_draw = Instant::now();
+                let primitive = ui.draw(&mut renderer, cursor_position);
+                eprintln!("draw took {:?}ns", before_draw.elapsed().as_nanos());
+                let mut force_render_all = false;
+
+                if let Some(ui_message) = &current_ui_message {
+                    for event in ui_message.events.iter() {
+                        match &event {
+                            Event::Window(..) => force_render_all = true,
+                            _ => (),
+                        }
+                    }
+                }
+
+                let before_render = Instant::now();
+                last_vbuffer =
+                    Some(renderer.render(&mut stdout, primitive, &last_vbuffer, force_render_all));
+                eprintln!("render took {:?}ns", before_render.elapsed().as_nanos());
 
                 let (messages, event_statuses, events, ui_updated) = match current_ui_message {
                     Some(ui_message) => {
@@ -199,6 +222,7 @@ pub trait Application {
                         let mut ui_updated = false;
 
                         if !ui_message.events.is_empty() {
+                            let before_ui_update = Instant::now();
                             event_statuses = ui.update(
                                 &ui_message.events,
                                 cursor_position,
@@ -207,6 +231,10 @@ pub trait Application {
                                 &mut messages,
                             );
                             ui_updated = true;
+                            eprintln!(
+                                "ui_update took {:?}ns",
+                                before_ui_update.elapsed().as_nanos()
+                            );
                         }
 
                         (messages, event_statuses, events, ui_updated)
@@ -219,10 +247,15 @@ pub trait Application {
                 // update state
                 let mut commands: Vec<Command<Self::Message>> = vec![];
 
+                let before_app_update = Instant::now();
                 for message in messages {
                     commands.push(app_bmut.update(message));
                     state_updated = true;
                 }
+                eprintln!(
+                    "app_update took {:?}ns",
+                    before_app_update.elapsed().as_nanos()
+                );
 
                 if ui_updated {
                     state_updated = true;
@@ -411,7 +444,10 @@ fn map_mouse_event(mouse_event: event::MouseEvent) -> Vec<mouse::Event> {
             delta: mouse::ScrollDelta::Lines { x: 0_f32, y: 1_f32 },
         }],
         event::MouseEventKind::ScrollUp => vec![mouse::Event::WheelScrolled {
-            delta: mouse::ScrollDelta::Lines { x: 0_f32, y: 1_f32 },
+            delta: mouse::ScrollDelta::Lines {
+                x: 0_f32,
+                y: -1_f32,
+            },
         }],
     }
 }

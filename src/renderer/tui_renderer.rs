@@ -36,12 +36,21 @@ impl TuiRenderer {
         output: &mut O,
         primitive: Primitive,
         last_vbuffer: &Option<VirtualBuffer>,
+        force_render_all: bool,
     ) -> VirtualBuffer
     where
         O: std::io::Write,
     {
         let vbuffer = self.make_vbuffer(primitive);
-        self.render_vbuffer(output, vbuffer, last_vbuffer)
+        self.render_vbuffer(
+            output,
+            vbuffer,
+            if force_render_all {
+                &None
+            } else {
+                last_vbuffer
+            },
+        )
     }
 
     pub fn render_vbuffer<O>(
@@ -117,6 +126,8 @@ impl TuiRenderer {
                     .unwrap();
                     attribute_changed = true;
                 }
+
+                eprintln!("rendering #{} - {}", i, content);
 
                 queue!(output, crossterm::style::Print(content)).unwrap();
 

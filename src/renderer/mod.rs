@@ -5,6 +5,7 @@ mod container;
 mod primitives;
 mod progress_bar;
 mod row;
+mod scrollable;
 mod space;
 mod style;
 mod text;

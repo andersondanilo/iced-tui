@@ -1,8 +1,8 @@
 use iced_futures::executor::Tokio;
 use iced_native::Subscription;
 use iced_native::{
-    button, keyboard, subscription, text_input, Button, Column, Command, Container, Element, Event,
-    Length, ProgressBar, Row, Space, Text, TextInput,
+    button, keyboard, scrollable, subscription, text_input, Button, Column, Command, Container,
+    Element, Event, Length, ProgressBar, Row, Space, Text, TextInput,
 };
 use iced_tui::{
     AnsiColor, Application, ButtonStyle, ProgressBarStyle, Style, TextInputStyle, TuiRenderer,
@@ -14,6 +14,8 @@ pub struct MyApp {
     text_state: text_input::State,
     input_value: String,
     button_state: button::State,
+    scroll_state: scrollable::State,
+    lines: Vec<String>,
 }
 
 #[derive(Clone, Debug)]
@@ -30,12 +32,19 @@ impl Application for MyApp {
     fn new() -> (MyApp, Command<Self::Message>) {
         let mut text_state = text_input::State::new();
         text_state.focus();
+
+        let lines: Vec<String> = (1..50)
+            .map(|n| format!("Showing content from line {}", n))
+            .collect();
+
         (
             MyApp {
                 should_exit: None,
                 text_state,
                 input_value: "".to_string(),
                 button_state: button::State::default(),
+                scroll_state: scrollable::State::default(),
+                lines,
             },
             Command::none(),
         )
@@ -94,7 +103,17 @@ impl Application for MyApp {
                             .fg(AnsiColor::Green)
                             .bg(AnsiColor::Black),
                     ),
-                ),
+                )
+                //.push(
+                //    scrollable::Scrollable::new(&mut self.scroll_state).push(
+                //        Column::with_children(
+                //            self.lines
+                //                .iter()
+                //                .map(|text| Text::new(text).into())
+                //                .collect(),
+                //        ),
+                //    ),
+                //),
         )
         .into()
     }

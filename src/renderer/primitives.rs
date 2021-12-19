@@ -100,6 +100,26 @@ impl Primitive {
             cursor_position: None,
         }
     }
+
+    pub fn cut_to_offset(mut self, offset: u16, height: u16) -> Self {
+        let mut new_cells = BTreeMap::new();
+        let start_y: u16 = self
+            .cells
+            .iter()
+            .fold(0, |start_y, ((_, y), _)| start_y.min(*y));
+
+        let cut_start_y = start_y + offset;
+        let cut_end_y = cut_start_y + height;
+
+        for ((x, y), cell) in self.cells.into_iter() {
+            if y >= cut_start_y && y < cut_end_y {
+                new_cells.insert((x, y - offset), cell);
+            }
+        }
+
+        self.cells = new_cells;
+        self
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -136,5 +156,31 @@ impl Default for Cell {
             content: None,
             style: Style::default(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    extern crate test;
+
+    use super::*;
+    use test::Bencher;
+
+    #[bench]
+    fn bench_primitive_rectangle(b: &mut Bencher) {
+        b.iter(|| Primitive::rectangle(0, 0, 200, 200, Cell::from_char(' ')))
+    }
+
+    #[bench]
+    fn bench_rectangle_clone(b: &mut Bencher) {
+        let rectangle = Primitive::rectangle(0, 0, 200, 200, Cell::from_char(' '));
+        b.iter(|| rectangle.clone())
+    }
+
+    #[bench]
+    fn bench_rectangle_merge(b: &mut Bencher) {
+        let rectangle1 = Primitive::rectangle(0, 0, 200, 200, Cell::from_char(' '));
+        let rectangle2 = rectangle1.clone();
+        b.iter(|| Primitive::merge(vec![rectangle1.clone(), rectangle2.clone()]))
     }
 }
