@@ -19,30 +19,31 @@ pub enum AnsiColor {
     White,
 }
 
+impl AnsiColor {
+    pub(crate) fn alpha_code(&self) -> u8 {
+        match self {
+            Self::Black => 110,
+            Self::Red => 111,
+            Self::DarkRed => 112,
+            Self::Green => 113,
+            Self::DarkGreen => 114,
+            Self::Yellow => 115,
+            Self::DarkYellow => 116,
+            Self::Blue => 117,
+            Self::DarkBlue => 118,
+            Self::Magenta => 119,
+            Self::DarkMagenta => 120,
+            Self::Cyan => 121,
+            Self::DarkCyan => 122,
+            Self::Grey => 123,
+            Self::White => 124,
+        }
+    }
+}
+
 impl Into<Color> for AnsiColor {
     fn into(self) -> Color {
-        Color::from_rgba8(
-            0,
-            0,
-            0,
-            match self {
-                Self::Black => 110.0,
-                Self::Red => 111.0,
-                Self::DarkRed => 112.0,
-                Self::Green => 113.0,
-                Self::DarkGreen => 114.0,
-                Self::Yellow => 115.0,
-                Self::DarkYellow => 116.0,
-                Self::Blue => 117.0,
-                Self::DarkBlue => 118.0,
-                Self::Magenta => 119.0,
-                Self::DarkMagenta => 120.0,
-                Self::Cyan => 121.0,
-                Self::DarkCyan => 122.0,
-                Self::Grey => 123.0,
-                Self::White => 124.0,
-            },
-        )
+        Color::from_rgba8(0, 0, 0, self.alpha_code() as f32)
     }
 }
 

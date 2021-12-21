@@ -1,3 +1,4 @@
+use super::colors::TermColor;
 use crate::CursorStyle;
 use crate::Style;
 use core::fmt::Debug;

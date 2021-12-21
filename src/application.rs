@@ -1,5 +1,5 @@
 use crate::constants::LOG_TARGET;
-use crate::renderer::VirtualBuffer;
+use crate::renderer::RenderResult;
 use crate::TuiRenderer;
 use core::cell::RefCell;
 pub use crossterm::{
@@ -24,7 +24,6 @@ use iced_native::UserInterface;
 use iced_native::{Cache, Element};
 use std::fmt::Debug;
 use std::rc::Rc;
-use std::sync::atomic::AtomicBool;
 use std::sync::atomic::AtomicU16;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
@@ -155,7 +154,8 @@ pub trait Application {
 
         let mut cache = Some(Cache::default());
         let mut renderer = TuiRenderer::default();
-        let mut last_vbuffer: Option<VirtualBuffer> = None;
+        let mut last_render: Option<RenderResult> = None;
+        let mut last_term_size = (0_u16, 0_u16);
 
         let mut stdout = std::io::stdout();
         renderer.begin_screen(&mut stdout);
@@ -168,10 +168,10 @@ pub trait Application {
             let mut state_updated = false;
             let current_ui_message = ui_message.clone();
             let (commands, subscription, events, event_statuses) = runtime.enter(|| {
-                let (width, height) = terminal::size().unwrap();
+                let term_size = terminal::size().unwrap();
                 let size = Size {
-                    width: width as f32,
-                    height: height as f32,
+                    width: term_size.0 as f32,
+                    height: term_size.1 as f32,
                 };
 
                 let cursor_position = Point {
@@ -179,37 +179,34 @@ pub trait Application {
                     y: (&last_mouse_position.1.load(Ordering::Relaxed)).clone() as f32,
                 };
 
-                eprintln!("received message {:?}", current_ui_message);
+                //eprintln!("received message {:?}", current_ui_message);
 
-                eprintln!("has cache {:?}", cache.is_some());
+                //eprintln!("has cache {:?}", cache.is_some());
 
                 // render and return messages
                 let mut app_bmut = application.borrow_mut();
                 let view_result = app_bmut.view();
 
-                let before_build = Instant::now();
+                //let before_build = Instant::now();
                 let mut ui =
                     UserInterface::build(view_result, size, cache.take().unwrap(), &mut renderer);
-                eprintln!("build ui took {:?}ns", before_build.elapsed().as_nanos());
+                // eprintln!("build ui took {:?}ns", before_build.elapsed().as_nanos());
 
-                let before_draw = Instant::now();
-                let primitive = ui.draw(&mut renderer, cursor_position);
-                eprintln!("draw took {:?}ns", before_draw.elapsed().as_nanos());
-                let mut force_render_all = false;
+                let should_render: bool = if let Some(ui_message) = &current_ui_message {
+                    term_size != last_term_size || ui_message.render_request
+                } else {
+                    true
+                };
 
-                if let Some(ui_message) = &current_ui_message {
-                    for event in ui_message.events.iter() {
-                        match &event {
-                            Event::Window(..) => force_render_all = true,
-                            _ => (),
-                        }
-                    }
+                if should_render {
+                    //let before_draw = Instant::now();
+                    let primitive = ui.draw(&mut renderer, cursor_position);
+                    //eprintln!("draw took {:?}ns", before_draw.elapsed().as_nanos());
+
+                    //let before_render = Instant::now();
+                    last_render = Some(renderer.render(&mut stdout, primitive, last_render.take()));
+                    //eprintln!("render took {:?}ns", before_render.elapsed().as_nanos());
                 }
-
-                let before_render = Instant::now();
-                last_vbuffer =
-                    Some(renderer.render(&mut stdout, &primitive, &last_vbuffer, force_render_all));
-                eprintln!("render took {:?}ns", before_render.elapsed().as_nanos());
 
                 let (messages, event_statuses, events, ui_updated) = match current_ui_message {
                     Some(ui_message) => {
@@ -222,7 +219,7 @@ pub trait Application {
                         let mut ui_updated = false;
 
                         if !ui_message.events.is_empty() {
-                            let before_ui_update = Instant::now();
+                            //let before_ui_update = Instant::now();
                             event_statuses = ui.update(
                                 &ui_message.events,
                                 cursor_position,
@@ -230,11 +227,18 @@ pub trait Application {
                                 &mut clipboard::Null,
                                 &mut messages,
                             );
-                            ui_updated = true;
-                            eprintln!(
-                                "ui_update took {:?}ns",
-                                before_ui_update.elapsed().as_nanos()
-                            );
+
+                            for status in &event_statuses {
+                                if status == &iced_native::event::Status::Captured {
+                                    //eprintln!("ui updated from events {:?}", &ui_message.events);
+                                    ui_updated = true;
+                                    break;
+                                }
+                            }
+                            //eprintln!(
+                            //    "ui_update took {:?}ns",
+                            //    before_ui_update.elapsed().as_nanos()
+                            //);
                         }
 
                         (messages, event_statuses, events, ui_updated)
@@ -247,21 +251,23 @@ pub trait Application {
                 // update state
                 let mut commands: Vec<Command<Self::Message>> = vec![];
 
-                let before_app_update = Instant::now();
+                //let before_app_update = Instant::now();
                 for message in messages {
+                    //eprintln!("app updated from message {:?}", message);
                     commands.push(app_bmut.update(message));
                     state_updated = true;
                 }
-                eprintln!(
-                    "app_update took {:?}ns",
-                    before_app_update.elapsed().as_nanos()
-                );
+                //eprintln!(
+                //    "app_update took {:?}ns",
+                //    before_app_update.elapsed().as_nanos()
+                //);
 
                 if ui_updated {
                     state_updated = true;
                 }
 
                 let subscription = app_bmut.subscription();
+                last_term_size = term_size;
 
                 (commands, subscription, events, event_statuses)
             });
@@ -304,6 +310,7 @@ pub trait Application {
                             std::thread::sleep(poll_rate);
                         } else {
                             break Some(UiMessage {
+                                render_request: state_updated,
                                 app_message: None,
                                 events: vec![],
                             });
@@ -462,6 +469,7 @@ fn map_mouse_button(button: event::MouseButton) -> mouse::Button {
 
 #[derive(Debug, Clone)]
 struct UiMessage<M> {
+    render_request: bool,
     app_message: Option<M>,
     events: Vec<Event>,
 }
@@ -469,6 +477,7 @@ struct UiMessage<M> {
 impl<M> UiMessage<M> {
     fn from_events(events: Vec<Event>) -> Self {
         UiMessage {
+            render_request: false,
             app_message: None,
             events,
         }
@@ -476,6 +485,7 @@ impl<M> UiMessage<M> {
 
     fn from_app_message(app_message: M) -> Self {
         UiMessage {
+            render_request: false,
             app_message: Some(app_message),
             events: vec![],
         }

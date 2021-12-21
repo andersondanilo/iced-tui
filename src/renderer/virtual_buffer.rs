@@ -1,13 +1,13 @@
 use super::primitives::{Cell, Primitive};
 use crate::CursorStyle;
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 pub struct VirtualBuffer {
     pub width: u16,
     pub height: u16,
     pub rows: Vec<Vec<Cell>>,
-    pub hash: u64,
     pub cursor_position: Option<(u16, u16, CursorStyle)>,
+    pub primitive_hash: u64,
 }
 
 impl VirtualBuffer {
@@ -25,7 +25,7 @@ impl VirtualBuffer {
             rows,
             width,
             height,
-            hash: 0,
+            primitive_hash: 0,
             cursor_position: None,
         }
     }
@@ -98,10 +98,10 @@ mod tests {
     fn bench_merge_primitive(b: &mut Bencher) {
         let primitive = make_example_primitive();
 
-        let mut virtual_buffer = VirtualBuffer::from_size(100, 100);
+        let mut vbuffer = VirtualBuffer::from_size(100, 100);
 
         b.iter(|| {
-            virtual_buffer.merge_primitive(&primitive);
+            vbuffer.merge_primitive(&primitive);
         });
     }
 
