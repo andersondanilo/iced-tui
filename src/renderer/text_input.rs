@@ -5,25 +5,13 @@ use crate::CursorStyle;
 use crate::Style;
 use iced_native::text_input;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Default)]
 pub struct TextInputStyle {
     pub(crate) normal: Style,
     pub(crate) focused: Style,
     pub(crate) placeholder: Style,
     pub(crate) hover: Style,
     pub(crate) cursor: CursorStyle,
-}
-
-impl Default for TextInputStyle {
-    fn default() -> Self {
-        Self {
-            normal: Style::default(),
-            focused: Style::default(),
-            placeholder: Style::default(),
-            hover: Style::default(),
-            cursor: CursorStyle::default(),
-        }
-    }
 }
 
 impl TextInputStyle {
@@ -91,7 +79,7 @@ impl text_input::Renderer for TuiRenderer {
             return (focused_index - text_bounds_length) as f32;
         }
 
-        return 0_f32;
+        0_f32
     }
 
     fn draw(
@@ -111,7 +99,7 @@ impl text_input::Renderer for TuiRenderer {
         let mut rendered_string = value.to_string();
         let mut rendered_is_placeholder = false;
 
-        if rendered_string.len() == 0 && !state.is_focused() {
+        if rendered_string.is_empty() && !state.is_focused() {
             rendered_string = placeholder.to_string();
             rendered_is_placeholder = true;
         }
@@ -131,7 +119,7 @@ impl text_input::Renderer for TuiRenderer {
         let text_style = if rendered_is_placeholder {
             main_style.merge(style.placeholder)
         } else {
-            main_style.clone()
+            main_style
         };
 
         let (mut parsed_primitives, _, _) = crop_text_to_bounds(
@@ -157,7 +145,7 @@ impl text_input::Renderer for TuiRenderer {
                     start_y,
                     Cell {
                         content: None,
-                        style: main_style.clone(),
+                        style: main_style,
                     },
                 ),
             };

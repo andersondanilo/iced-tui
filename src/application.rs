@@ -28,7 +28,6 @@ use std::sync::atomic::AtomicU16;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::time::Duration;
-use std::time::Instant;
 
 pub trait Application {
     type Executor: Executor;
@@ -136,7 +135,7 @@ pub trait Application {
                 };
 
                 if let Err(err) =
-                    ui_iced_event_sender.unbounded_send(UiMessage::from_events(iced_events))
+                    ui_iced_event_sender.unbounded_send(UiMessage::IcedEvents(iced_events))
                 {
                     log::error!(target: LOG_TARGET, "{}", err);
                     return;
@@ -160,7 +159,7 @@ pub trait Application {
         let mut stdout = std::io::stdout();
         renderer.begin_screen(&mut stdout);
 
-        let mut ui_message: Option<UiMessage<Self::Message>> = None;
+        let mut ui_message: UiMessage<Self::Message> = UiMessage::RenderRequest;
 
         // event loop on main thread
         let exit_status_code: u8 = loop {
@@ -175,53 +174,35 @@ pub trait Application {
                 };
 
                 let cursor_position = Point {
-                    x: (&last_mouse_position.0.load(Ordering::Relaxed)).clone() as f32,
-                    y: (&last_mouse_position.1.load(Ordering::Relaxed)).clone() as f32,
+                    x: last_mouse_position.0.load(Ordering::Relaxed) as f32,
+                    y: last_mouse_position.1.load(Ordering::Relaxed) as f32,
                 };
-
-                //eprintln!("received message {:?}", current_ui_message);
-
-                //eprintln!("has cache {:?}", cache.is_some());
 
                 // render and return messages
                 let mut app_bmut = application.borrow_mut();
                 let view_result = app_bmut.view();
 
-                //let before_build = Instant::now();
                 let mut ui =
                     UserInterface::build(view_result, size, cache.take().unwrap(), &mut renderer);
-                // eprintln!("build ui took {:?}ns", before_build.elapsed().as_nanos());
 
-                let should_render: bool = if let Some(ui_message) = &current_ui_message {
-                    term_size != last_term_size || ui_message.render_request
-                } else {
-                    true
-                };
-
-                if should_render {
-                    //let before_draw = Instant::now();
+                if ui_message.is_render_request() {
                     let primitive = ui.draw(&mut renderer, cursor_position);
-                    //eprintln!("draw took {:?}ns", before_draw.elapsed().as_nanos());
-
-                    //let before_render = Instant::now();
                     last_render = Some(renderer.render(&mut stdout, primitive, last_render.take()));
-                    //eprintln!("render took {:?}ns", before_render.elapsed().as_nanos());
                 }
 
-                let (messages, event_statuses, events, ui_updated) = match current_ui_message {
-                    Some(ui_message) => {
-                        let mut messages: Vec<Self::Message> = match ui_message.app_message {
-                            Some(m) => vec![m],
-                            None => vec![],
-                        };
-                        let mut event_statuses = vec![];
-                        let events = ui_message.events.clone();
-                        let mut ui_updated = false;
+                let mut messages: Vec<Self::Message> = vec![];
+                let mut events: Vec<Event> = vec![];
+                let mut event_statuses: Vec<iced_native::event::Status> = vec![];
+                let mut ui_updated = false;
 
-                        if !ui_message.events.is_empty() {
-                            //let before_ui_update = Instant::now();
+                match current_ui_message {
+                    UiMessage::AppMessage(message) => messages.push(message),
+                    UiMessage::IcedEvents(iced_events) => {
+                        events = iced_events;
+
+                        if !events.is_empty() {
                             event_statuses = ui.update(
-                                &ui_message.events,
+                                &events,
                                 cursor_position,
                                 &renderer,
                                 &mut clipboard::Null,
@@ -230,20 +211,13 @@ pub trait Application {
 
                             for status in &event_statuses {
                                 if status == &iced_native::event::Status::Captured {
-                                    //eprintln!("ui updated from events {:?}", &ui_message.events);
                                     ui_updated = true;
                                     break;
                                 }
                             }
-                            //eprintln!(
-                            //    "ui_update took {:?}ns",
-                            //    before_ui_update.elapsed().as_nanos()
-                            //);
                         }
-
-                        (messages, event_statuses, events, ui_updated)
                     }
-                    None => (vec![], vec![], vec![], false),
+                    _ => (),
                 };
 
                 cache = Some(ui.into_cache());
@@ -251,16 +225,10 @@ pub trait Application {
                 // update state
                 let mut commands: Vec<Command<Self::Message>> = vec![];
 
-                //let before_app_update = Instant::now();
                 for message in messages {
-                    //eprintln!("app updated from message {:?}", message);
                     commands.push(app_bmut.update(message));
                     state_updated = true;
                 }
-                //eprintln!(
-                //    "app_update took {:?}ns",
-                //    before_app_update.elapsed().as_nanos()
-                //);
 
                 if ui_updated {
                     state_updated = true;
@@ -277,25 +245,18 @@ pub trait Application {
             }
 
             for (event, event_status) in events.iter().zip(event_statuses) {
-                //log::debug!(
-                //    target: LOG_TARGET,
-                //    "broadcasting event: {:?}, status: {:?}",
-                //    event,
-                //    event_status
-                //);
                 runtime.broadcast((event.clone(), event_status));
             }
 
             runtime.track(subscription);
 
             if let Some(status_code) = application.borrow().should_exit() {
-                //log::debug!(target: LOG_TARGET, "Exiting app");
                 break status_code;
             }
 
             ui_message = loop {
                 match receiver.try_next() {
-                    Ok(Some(m)) => break Some(m),
+                    Ok(Some(m)) => break m,
                     Ok(None) => {
                         log::error!(
                             target: LOG_TARGET,
@@ -309,11 +270,7 @@ pub trait Application {
                         if !state_updated {
                             std::thread::sleep(poll_rate);
                         } else {
-                            break Some(UiMessage {
-                                render_request: state_updated,
-                                app_message: None,
-                                events: vec![],
-                            });
+                            break UiMessage::RenderRequest;
                         }
                     }
                 }
@@ -468,27 +425,15 @@ fn map_mouse_button(button: event::MouseButton) -> mouse::Button {
 }
 
 #[derive(Debug, Clone)]
-struct UiMessage<M> {
-    render_request: bool,
-    app_message: Option<M>,
-    events: Vec<Event>,
+enum UiMessage<M> {
+    RenderRequest,
+    AppMessage(M),
+    IcedEvents(Vec<Event>),
 }
 
 impl<M> UiMessage<M> {
-    fn from_events(events: Vec<Event>) -> Self {
-        UiMessage {
-            render_request: false,
-            app_message: None,
-            events,
-        }
-    }
-
-    fn from_app_message(app_message: M) -> Self {
-        UiMessage {
-            render_request: false,
-            app_message: Some(app_message),
-            events: vec![],
-        }
+    fn is_render_request(&self) -> bool {
+        matches!(self, UiMessage::RenderRequest)
     }
 }
 
@@ -519,7 +464,7 @@ impl<M> Sink<M> for AppMessageMapperSink<M> {
     ) -> std::result::Result<(), <Self as futures::Sink<M>>::Error> {
         self.get_mut()
             .sender
-            .start_send(UiMessage::from_app_message(message))
+            .start_send(UiMessage::AppMessage(message))
     }
 
     fn poll_flush(

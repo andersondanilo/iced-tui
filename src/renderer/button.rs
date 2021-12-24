@@ -5,23 +5,12 @@ use crate::Style;
 use iced_native::button;
 use iced_native::Layout;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Default)]
 pub struct ButtonStyle {
     pub(crate) normal: Style,
     pub(crate) hover: Style,
     pub(crate) pressed: Style,
     pub(crate) disabled: Style,
-}
-
-impl Default for ButtonStyle {
-    fn default() -> Self {
-        Self {
-            normal: Style::default(),
-            hover: Style::default(),
-            pressed: Style::default(),
-            disabled: Style::default(),
-        }
-    }
 }
 
 impl ButtonStyle {

@@ -1,4 +1,4 @@
-use super::colors::TermColor;
+
 use crate::CursorStyle;
 use crate::Style;
 use core::fmt::Debug;
@@ -17,7 +17,7 @@ impl Primitive {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub struct Cell {
     pub content: Option<char>,
     pub style: Style,
@@ -46,14 +46,5 @@ impl Cell {
     pub fn style(mut self, style: Style) -> Self {
         self.style = style;
         self
-    }
-}
-
-impl Default for Cell {
-    fn default() -> Self {
-        Self {
-            content: None,
-            style: Style::default(),
-        }
     }
 }

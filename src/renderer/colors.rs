@@ -41,9 +41,9 @@ impl AnsiColor {
     }
 }
 
-impl Into<Color> for AnsiColor {
-    fn into(self) -> Color {
-        Color::from_rgba8(0, 0, 0, self.alpha_code() as f32)
+impl From<AnsiColor> for Color {
+    fn from(ansi_color: AnsiColor) -> Self {
+        Color::from_rgba8(0, 0, 0, ansi_color.alpha_code() as f32)
     }
 }
 

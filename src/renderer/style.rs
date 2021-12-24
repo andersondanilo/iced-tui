@@ -1,21 +1,11 @@
 use super::colors::TermColor;
 use iced_native::Color;
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub struct Style {
     pub(crate) fg_color: Option<TermColor>,
     pub(crate) bg_color: Option<TermColor>,
     pub(crate) is_bold: bool,
-}
-
-impl Default for Style {
-    fn default() -> Self {
-        Self {
-            fg_color: None,
-            bg_color: None,
-            is_bold: false,
-        }
-    }
 }
 
 impl Style {
@@ -24,7 +14,7 @@ impl Style {
     }
 
     pub fn is_empty(&self) -> bool {
-        self.fg_color.is_none() && self.bg_color.is_none() && self.is_bold == false
+        self.fg_color.is_none() && self.bg_color.is_none() && !self.is_bold
     }
 
     pub fn try_merge(self, other: Option<Self>) -> Self {

@@ -16,7 +16,7 @@ mod virtual_buffer;
 
 pub use button::ButtonStyle;
 pub use colors::AnsiColor;
-pub(crate) use primitives::Primitive;
+
 pub use progress_bar::ProgressBarStyle;
 pub use style::CursorShape;
 pub use style::CursorStyle;
@@ -24,4 +24,4 @@ pub use style::Style;
 pub use text_input::TextInputStyle;
 pub(crate) use tui_renderer::RenderResult;
 pub use tui_renderer::TuiRenderer;
-pub(crate) use virtual_buffer::VirtualBuffer;
+

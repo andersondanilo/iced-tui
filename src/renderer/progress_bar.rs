@@ -4,19 +4,10 @@ use crate::Style;
 use iced_native::progress_bar;
 use iced_native::Color;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Default)]
 pub struct ProgressBarStyle {
     pub(crate) loaded_style: Style,
     pub(crate) unloaded_style: Style,
-}
-
-impl Default for ProgressBarStyle {
-    fn default() -> Self {
-        Self {
-            loaded_style: Style::default(),
-            unloaded_style: Style::default(),
-        }
-    }
 }
 
 impl ProgressBarStyle {

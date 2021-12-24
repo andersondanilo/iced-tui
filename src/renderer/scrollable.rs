@@ -20,12 +20,12 @@ impl scrollable::Renderer for TuiRenderer {
     fn draw(
         &mut self,
         _scrollable: &iced_native::scrollable::State,
-        bounds: iced_core::Rectangle,
+        _bounds: iced_core::Rectangle,
         _content_bounds: iced_core::Rectangle,
         _is_mouse_over: bool,
         _is_mouse_over_scrollbar: bool,
         _scrollbar: std::option::Option<iced_native::scrollable::Scrollbar>,
-        offset: u32,
+        _offset: u32,
         _style: &<Self as iced_native::scrollable::Renderer>::Style,
         content: <Self as iced_native::Renderer>::Output,
     ) -> <Self as iced_native::Renderer>::Output {

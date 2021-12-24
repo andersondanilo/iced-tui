@@ -5,6 +5,7 @@ use super::virtual_buffer::VirtualBuffer;
 use crossterm::{cursor, execute, queue, terminal};
 use iced_native::Renderer;
 
+#[derive(Default)]
 pub struct TuiRenderer {}
 
 pub struct RenderResult {
@@ -32,7 +33,7 @@ impl TuiRenderer {
 
     fn make_vbuffer(&self, primitive: &Primitive, width: u16, height: u16) -> VirtualBuffer {
         let mut vbuffer = VirtualBuffer::from_size(width, height);
-        vbuffer.merge_primitive(&primitive);
+        vbuffer.merge_primitive(primitive);
         vbuffer
     }
 
@@ -241,12 +242,6 @@ impl Renderer for TuiRenderer {
     }
 }
 
-impl Default for TuiRenderer {
-    fn default() -> Self {
-        Self {}
-    }
-}
-
 #[cfg(test)]
 mod tests {
     extern crate test;
@@ -299,7 +294,7 @@ mod tests {
         let vbuffer = make_example_vbuffer();
         b.iter(|| {
             let row = &vbuffer.rows[0].clone();
-            split_by_style(&row)
+            split_by_style(row)
         })
     }
 

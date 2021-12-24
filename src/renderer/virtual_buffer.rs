@@ -53,9 +53,7 @@ impl VirtualBuffer {
                     self.rows[*y as usize][*x as usize].merge(*cell);
                 }
             }
-            Primitive::CursorPosition(x, y, style) => {
-                self.cursor_position = Some((*x, *y, style.clone()))
-            }
+            Primitive::CursorPosition(x, y, style) => self.cursor_position = Some((*x, *y, *style)),
         };
     }
 }
@@ -114,18 +112,18 @@ mod tests {
 
         b.iter(|| {
             let mut cell_vec: Vec<Cell> = vec![
-                cell_a.clone(),
-                cell_b.clone(),
-                cell_c.clone(),
-                cell_d.clone(),
-                cell_a.clone(),
-                cell_b.clone(),
-                cell_c.clone(),
-                cell_d.clone(),
-                cell_a.clone(),
-                cell_b.clone(),
-                cell_c.clone(),
-                cell_d.clone(),
+                cell_a,
+                cell_b,
+                cell_c,
+                cell_d,
+                cell_a,
+                cell_b,
+                cell_c,
+                cell_d,
+                cell_a,
+                cell_b,
+                cell_c,
+                cell_d,
             ];
 
             for cell in cell_vec.iter_mut() {
